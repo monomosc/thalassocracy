@@ -1,0 +1,19 @@
+# Thalassocracy server config
+
+# UDP port to bind
+port = 61234
+
+# Maximum simultaneous clients
+max_clients = 64
+
+# Server simulation tick rate (Hz)
+tick_hz = 30
+
+# Target snapshot send rate (Hz)
+snapshot_hz = 20
+
+# Optional public address to advertise in netcode tokens
+# For local dev, leave unset. For remote hosting, set this to a reachable
+# IP/hostname and port so clients can validate the token and connect.
+# Example:
+# public_addr = "203.0.113.10:61234"

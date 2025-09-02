@@ -1,0 +1,30 @@
+# Rust build output
+/target/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor/IDE settings
+.vscode/
+.idea/
+*.code-workspace
+
+# Swap/backup files
+*.swp
+*.swo
+*~
+
+# Logs and caches
+*.log
+logs/
+.cache/
+tmp/
+.temp/
+coverage/
+
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+

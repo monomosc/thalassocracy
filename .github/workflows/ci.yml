@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check protocol + server
+        run: cargo +nightly check -p protocol -p server
+
+      - name: Check client (headless)
+        run: cargo +nightly check -p client --no-default-features
+
+      - name: Clippy (advisory)
+        run: |
+          cargo +nightly clippy -p protocol -p server -- -D warnings || true
+          cargo +nightly clippy -p client --no-default-features -- -D warnings || true

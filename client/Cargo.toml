@@ -1,0 +1,28 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+bevy = { version = "0.16", default-features = false, features = [
+    "bevy_asset",
+    "bevy_core_pipeline",
+    "bevy_render",
+    "bevy_pbr",
+    "bevy_sprite",
+    "multi_threaded",
+    "png",
+    "tonemapping_luts",
+] }
+bevy_renet = "2.0.0"
+protocol = { path = "../protocol" }
+serde = { version = "1", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[features]
+default = ["windowing"]
+windowing = ["bevy/bevy_winit"]

@@ -1,0 +1,5 @@
+[alias]
+# Headless client check for CI/sandbox (no windowing backend)
+check-sandbox = "check -p client --no-default-features"
+# Full workspace (server + protocol) checks
+check-workspace = "check -p protocol -p server"

@@ -17,9 +17,9 @@ Core loop: fly skiff → fight current → mine node → haul back → dock → 
 ## Milestones
 
 ### Milestone 0 — Scaffolding
-- [ ] Rust workspace with `client/`, `server/`, and `protocol/` crate.
-- [ ] Define protocol messages (serde).
-- [ ] Clients can connect to server.
+- [x] Rust workspace with `client/`, `server/`, and `protocol/` crate.
+- [x] Define protocol messages (serde).
+- [x] Clients can connect to server.
 
 ### Milestone 1 — World Greybox
 - [ ] One station cavern, one ΔP tunnel, one mining chamber.
