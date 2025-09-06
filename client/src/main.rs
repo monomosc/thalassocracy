@@ -1,12 +1,28 @@
 use anyhow::Result;
 use bevy::prelude::*;
+use bevy::asset::AssetPlugin;
 use bevy_renet::{netcode::NetcodeClientPlugin, RenetClientPlugin};
 use clap::Parser;
+use bevy::pbr::wireframe::WireframePlugin;
+#[cfg(feature = "windowing")]
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 mod net;
-use net::{client_connect, crash_on_disconnect, enforce_connect_timeout, HelloSent};
+use net::{client_connect, crash_on_disconnect, enforce_connect_timeout, HelloSent, MyPlayerId, LatestStateDelta};
+mod labels;
+use labels::LabelPlugin;
+mod debug_vis;
+use debug_vis::DebugVisPlugin;
+mod desync_metrics;
+use desync_metrics::DesyncMetricsPlugin;
 mod scene;
 use scene::ScenePlugin;
+use scene::SimSet;
+mod hud_controls;
+use hud_controls::HudControlsPlugin;
+mod hud_instruments;
+use hud_instruments::HudInstrumentsPlugin;
+mod sim_pause;
 
 #[derive(Parser, Debug, Resource)]
 #[command(name = "thalassocracy-client")] 
@@ -38,16 +54,37 @@ fn main() -> Result<()> {
     if args.headless {
         app.add_plugins(MinimalPlugins);
     } else {
-        app.add_plugins(DefaultPlugins);
+        app.add_plugins(DefaultPlugins.set(AssetPlugin {
+            file_path: "assets".into(),                           //AGENT: DON'T CHANGE!, path is relative to the client-crate
+            ..Default::default()
+        }));
+        #[cfg(feature = "windowing")]
+        {
+            use bevy_inspector_egui::bevy_egui::EguiPlugin;
+
+            app.add_plugins(EguiPlugin::default());
+            app.add_plugins(WorldInspectorPlugin::default());
+            app.add_plugins(HudControlsPlugin);
+            app.add_plugins(HudInstrumentsPlugin);
+        }
     }
 
     app.insert_resource(args)
         .init_resource::<HelloSent>()
+        .init_resource::<MyPlayerId>()
+        .init_resource::<LatestStateDelta>()
+        .init_resource::<sim_pause::SimPause>()
+        .configure_sets(Update, (net::NetSet, SimSet).chain())
         .add_plugins(RenetClientPlugin)
         .add_plugins(NetcodeClientPlugin)
+        .add_plugins(WireframePlugin::default())
+        .add_plugins(DesyncMetricsPlugin)
+        .add_plugins(DebugVisPlugin)
         .add_plugins(ScenePlugin)
+        .add_plugins(LabelPlugin)
         .add_systems(Startup, client_connect)
-        .add_systems(Update, (net::pump_network, crash_on_disconnect, enforce_connect_timeout));
+        .add_systems(Update, (net::pump_network, net::apply_state_to_sub).in_set(net::NetSet))
+        .add_systems(Update, (crash_on_disconnect, enforce_connect_timeout));
 
     app.run();
     Ok(())

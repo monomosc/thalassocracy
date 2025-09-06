@@ -22,9 +22,9 @@ Core loop: fly skiff → fight current → mine node → haul back → dock → 
 - [x] Clients can connect to server.
 
 ### Milestone 1 — World Greybox
-- [ ] One station cavern, one ΔP tunnel, one mining chamber.
-- [ ] Flow field in tunnel.
-- [ ] Docking pad volume.
+- [x] One station cavern, one ΔP tunnel, one mining chamber.
+- [x] Flow field in tunnel.
+- [x] Docking pad volume.
 
 ### Milestone 2 — Skiff and HUD
 - [ ] Skiff entity: thrust, ballast, drag; server authoritative.

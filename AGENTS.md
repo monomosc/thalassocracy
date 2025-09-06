@@ -3,4 +3,9 @@ For more granular step-by-step plans refer to the design/PROTOTYPE_PLAN.md
 
 ### Checking
 
-After every question, vet the code both with `cargo check` and `cargo clippy` on all 3 crates.
+After every code change, vet the code both with `cargo check` and `cargo clippy` on all 3 crates.
+
+
+### Misc
+
+- whenever you encounter a file above 300 Lines of Code, consider if it is a good idea to split it up

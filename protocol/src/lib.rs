@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 3;
 // Shared netcode protocol id used by client and server handshakes
 pub const NETCODE_PROTOCOL_ID: u64 = 7;
 
@@ -27,14 +27,17 @@ pub enum ClientToServer {
     InputTick(InputTick),
     MineRequest(MineRequest),
     DockRequest(DockRequest),
+    PauseRequest(PauseRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerToClient {
     JoinAck(JoinAck),
     StateDelta(StateDelta),
+    InputAck(InputAck),
     MineAck(MineAck),
     DockAck(DockAck),
+    PauseState(PauseState),
     Disconnect(DisconnectReason),
 }
 
@@ -47,6 +50,8 @@ pub struct ClientHello {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JoinAck {
     pub player_id: Uuid,
+    /// Server physics tick rate (Hz) for client fixed-step prediction.
+    pub tick_hz: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,8 +59,18 @@ pub struct InputTick {
     pub tick: u64,
     // Minimal input set for Milestone 0; expand later.
     pub thrust: f32,
+    /// Rudder input in [-1,1]. Convention: +1 = right rudder (nose yaws right
+    /// under forward motion), −1 = left rudder.
     pub yaw: f32,
-    pub ballast: f32,
+    /// Forward ballast pump speed in [-1,1]. +1 pumps water in (fill), -1 pumps out.
+    pub pump_fwd: f32,
+    /// Aft ballast pump speed in [-1,1]. +1 pumps water in (fill), -1 pumps out.
+    pub pump_aft: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputAck {
+    pub tick: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +85,10 @@ pub struct NetPlayer {
     pub id: Uuid,
     pub position: [f32; 3],
     pub velocity: [f32; 3],
+    /// Heading/yaw in radians around world +Y axis. Convention: 0 = +X; positive turns left (towards −Z).
+    pub yaw: f32,
+    /// Full body orientation as quaternion, `[x, y, z, w]` order.
+    pub orientation: [f32; 4],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +108,12 @@ pub struct DockRequest;
 pub struct DockAck {
     pub credits_after: u64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PauseRequest { pub paused: bool }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PauseState { pub paused: bool }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DisconnectReason {
