@@ -17,6 +17,7 @@ use levels::subspecs::small_skiff_spec;
 use levels::SubPhysicsSpec;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use tracing::{info, warn};
 
 #[derive(Parser, Debug, Resource)]
@@ -117,6 +118,11 @@ struct SnapshotTiming { acc: f32, dt: f32 }
 
 #[derive(Resource)]
 struct Tick(pub u64);
+#[derive(Resource)]
+struct ServerStart(pub std::time::Instant);
+
+#[derive(Resource, Default)]
+struct InputEventInbox(Vec<(Entity, protocol::InputEvent)>);
 
 #[derive(Resource, Default)]
 struct SimPaused(pub bool);
@@ -124,6 +130,9 @@ struct SimPaused(pub bool);
 #[allow(dead_code)]
 #[derive(Component, Default)]
 struct ControlInputComp { thrust: f32, yaw: f32, pump_fwd: f32, pump_aft: f32, last_tick: u64 }
+
+#[derive(Component, Default)]
+struct InputSchedule(VecDeque<protocol::InputEvent>);
 
 fn server_setup(mut commands: Commands, cfg: Res<Config>) {
     // Bind UDP socket
@@ -141,6 +150,8 @@ fn server_setup(mut commands: Commands, cfg: Res<Config>) {
     commands.insert_resource(Tick(0));
     commands.insert_resource(ClientEntities::default());
     commands.insert_resource(SimPaused(false));
+    commands.insert_resource(ServerStart(std::time::Instant::now()));
+    commands.insert_resource(InputEventInbox::default());
 
     // Netcode transport (renet)
     let bound_addr = socket.local_addr().expect("udp local_addr");
@@ -195,6 +206,7 @@ fn server_handle_messages(
     mut clients: ResMut<ClientEntities>,
     mut paused: ResMut<SimPaused>,
     cfg: Res<Config>,
+    mut inbox: ResMut<InputEventInbox>,
 ) {
     for client_id in server.clients_id() {
         while let Some(payload) = server.receive_message(client_id, DefaultChannel::ReliableOrdered) {
@@ -246,6 +258,19 @@ fn server_handle_messages(
                         commands.entity(entity).insert(ControlInputComp { thrust, yaw, pump_fwd, pump_aft, last_tick: input.tick });
                     }
                 }
+                Ok(ClientToServer::InputEvent(ev)) => {
+                    // Queue future-dated input; apply in physics tick when t_ms has passed
+                    if let Some(&entity) = clients.0.get(&client_id) {
+                        let evc = protocol::InputEvent {
+                            t_ms: ev.t_ms,
+                            thrust: ev.thrust.clamp(-1.0, 1.0),
+                            yaw: ev.yaw.clamp(-1.0, 1.0),
+                            pump_fwd: ev.pump_fwd.clamp(-1.0, 1.0),
+                            pump_aft: ev.pump_aft.clamp(-1.0, 1.0),
+                        };
+                        inbox.0.push((entity, evc));
+                    }
+                }
                 Ok(ClientToServer::PauseRequest(req)) => {
                     paused.0 = req.paused;
                     let msg = ServerToClient::PauseState(protocol::PauseState { paused: paused.0 });
@@ -272,8 +297,10 @@ fn server_physics_tick(
     mut server: ResMut<RenetServer>,
     mut clients: ResMut<ClientEntities>,
     mut commands: Commands,
-    mut q: Query<(Entity, &mut SubStateComp, &SubPhysicsComp, Option<&ControlInputComp>)>,
+    mut q: Query<(Entity, &mut SubStateComp, &SubPhysicsComp, Option<&ControlInputComp>, Option<&mut InputSchedule>)>,
     paused: Res<SimPaused>,
+    start: Res<ServerStart>,
+    mut inbox: ResMut<InputEventInbox>,
 ) {
     if paused.0 {
         // Drop accumulated dt to avoid huge catch-up on resume.
@@ -282,7 +309,26 @@ fn server_physics_tick(
     }
     timing.acc += time.delta_secs();
     while timing.acc >= timing.dt {
-        for (entity, mut s, spec, input) in &mut q {
+        let now_ms = start.0.elapsed().as_millis() as u64;
+        if !inbox.0.is_empty() {
+            for (entity, evc) in inbox.0.drain(..) {
+                if let Ok((_e, _s, _sp, _ci, Some(mut sched))) = q.get_mut(entity) {
+                    let pos = sched.0.iter().position(|e| e.t_ms > evc.t_ms).unwrap_or(sched.0.len());
+                    sched.0.insert(pos, evc);
+                } else {
+                    commands.entity(entity).insert(InputSchedule(VecDeque::from([evc])));
+                }
+            }
+        }
+        for (entity, mut s, spec, input, schedule) in &mut q {
+            // Apply any scheduled inputs whose time has arrived
+            if let Some(mut sched) = schedule {
+                while let Some(front) = sched.0.front() {
+                    if front.t_ms > now_ms { break; }
+                    let ev = sched.0.pop_front().unwrap();
+                    commands.entity(entity).insert(ControlInputComp { thrust: ev.thrust, yaw: ev.yaw, pump_fwd: ev.pump_fwd, pump_aft: ev.pump_aft, last_tick: tick.0 });
+                }
+            }
             let inp = if let Some(ci) = input { SubInputs { thrust: ci.thrust, yaw: ci.yaw, pump_fwd: ci.pump_fwd, pump_aft: ci.pump_aft } } else { SubInputs::default() };
             step_submarine(&level.0, &spec.0, inp, &mut s.0, timing.dt, time.elapsed_secs());
             // Collision with tunnel walls (server-authoritative): Y/Z outside interior AABB
@@ -314,6 +360,7 @@ fn server_broadcast_state(
     time: Res<Time>,
     mut timing: ResMut<SnapshotTiming>,
     tick: Res<Tick>,
+    start: Res<ServerStart>,
     mut server: ResMut<RenetServer>,
     q: Query<(&Player, &SubStateComp)>,
 ) {
@@ -331,7 +378,8 @@ fn server_broadcast_state(
             orientation: [state.0.orientation.x, state.0.orientation.y, state.0.orientation.z, state.0.orientation.w],
         });
     }
-    let delta = protocol::StateDelta { tick: tick.0, players };
+    let server_ms = start.0.elapsed().as_millis() as u64;
+    let delta = protocol::StateDelta { tick: tick.0, server_ms, players };
     let payload = protocol::encode(&protocol::ServerToClient::StateDelta(delta)).unwrap();
     for client_id in server.clients_id() {
         // Use unreliable channel for snapshots to avoid HOL blocking.

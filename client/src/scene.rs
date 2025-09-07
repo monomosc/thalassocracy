@@ -92,6 +92,10 @@ pub struct ServerCorrection {
     pub duration: f32,
 }
 
+/// Marker for entities whose transform is driven by network snapshots.
+#[derive(Component)]
+pub struct NetControlled;
+
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SimSet;
 
@@ -370,7 +374,7 @@ fn spawn_greybox(
         let tb = TunnelBounds { size: tunnel_size };
         let start = tunnel_pos + Vec3::new(-tb.size.x * 0.5 + 6.0, 0.0, 0.0);
 
-    let sub_root = commands
+        let sub_root = commands
             .spawn((
                 Transform::from_translation(start),
                 GlobalTransform::default(),
@@ -475,7 +479,7 @@ fn draw_flow_gizmos(
 
 fn simulate_submarine(
     time: Res<Time>,
-    mut q_sub: Query<(&mut Transform, &mut Velocity, &SubPhysics, Option<&ServerCorrection>, &mut AngularVelocity), With<Submarine>>,
+    mut q_sub: Query<(&mut Transform, &mut Velocity, &SubPhysics, Option<&ServerCorrection>, &mut AngularVelocity, Option<&NetControlled>), With<Submarine>>,
     controls: Option<Res<crate::hud_controls::ThrustInput>>,
     mut telemetry: ResMut<SubTelemetry>,
     paused: Res<SimPause>,
@@ -501,7 +505,8 @@ fn simulate_submarine(
 
     let inputs = if let Some(c) = controls { SubInputs { thrust: c.value, yaw: c.yaw, pump_fwd: c.pump_fwd, pump_aft: c.pump_aft } } else { SubInputs::default() };
 
-    for (mut transform, mut vel, spec, correction, mut ang_vel_comp) in &mut q_sub {
+    for (mut transform, mut vel, spec, correction, mut ang_vel_comp, net) in &mut q_sub {
+        let net_driven = net.is_some();
         // Persist ballast fill across frames using last telemetry (single local player)
         // Default to 50% fill; override from telemetry if available (mass_eff > 0 implies prior step)
         let mut prev_fill = vec![0.5; spec.0.ballast_tanks.len()];
@@ -531,14 +536,16 @@ fn simulate_submarine(
             step_submarine_dbg(&level, &spec.0, inputs, &mut state, step_dt, t_sub, Some(&mut dbg));
             telemetry.0 = dbg; // store last step's diagnostics
         }
-        transform.translation = Vec3::new(state.position.x, state.position.y, state.position.z);
-        // If a server correction smoothing is active, avoid fighting it on rotation.
-        // Otherwise, apply full simulated orientation (yaw + pitch).
-        if correction.is_none() {
-            transform.rotation = quatf_to_bevy(state.orientation);
+        if !net_driven {
+            transform.translation = Vec3::new(state.position.x, state.position.y, state.position.z);
+            // If a server correction smoothing is active, avoid fighting it on rotation.
+            // Otherwise, apply full simulated orientation (yaw + pitch).
+            if correction.is_none() {
+                transform.rotation = quatf_to_bevy(state.orientation);
+            }
+            **vel = Vec3::new(state.velocity.x, state.velocity.y, state.velocity.z);
+            **ang_vel_comp = Vec3::new(state.ang_vel.x, state.ang_vel.y, state.ang_vel.z);
         }
-        **vel = Vec3::new(state.velocity.x, state.velocity.y, state.velocity.z);
-        **ang_vel_comp = Vec3::new(state.ang_vel.x, state.ang_vel.y, state.ang_vel.z);
     }
 }
 

@@ -80,7 +80,7 @@ pub mod subspecs {
             // Angular damping
             kr: 400.0,
             kr2: 120.0,
-            kq: 200.0,
+            kq: 600.0,
             nr_v: 0.02,
             volume_m3: std::f32::consts::PI * radius * radius * length,
             // Controls

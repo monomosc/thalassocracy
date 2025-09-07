@@ -25,6 +25,8 @@ pub enum Channel {
 pub enum ClientToServer {
     Hello(ClientHello),
     InputTick(InputTick),
+    /// Time-stamped control event in server time (ms) for clean scheduling.
+    InputEvent(InputEvent),
     MineRequest(MineRequest),
     DockRequest(DockRequest),
     PauseRequest(PauseRequest),
@@ -76,6 +78,8 @@ pub struct InputAck {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateDelta {
     pub tick: u64,
+    /// Server time in milliseconds since an arbitrary start (monotonic).
+    pub server_ms: u64,
     // Compact state for now; replace with snapshot diff when ready.
     pub players: Vec<NetPlayer>,
 }
@@ -120,6 +124,16 @@ pub enum DisconnectReason {
     IncompatibleProtocol { server: u16, client: u16 },
     Kicked,
     ServerShutdown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputEvent {
+    /// Effective time in server milliseconds when the input should take effect.
+    pub t_ms: u64,
+    pub thrust: f32,
+    pub yaw: f32,
+    pub pump_fwd: f32,
+    pub pump_aft: f32,
 }
 
 // Simple helpers for bincode encoding.

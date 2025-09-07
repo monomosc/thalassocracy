@@ -29,6 +29,9 @@ pub struct LatestStateDelta(pub Option<StateDelta>);
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NetSet;
 
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct TimeSync { pub offset_ms: f32, pub last_server_ms: u64 }
+
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct FilteredServerState {
     pub initialized: bool,
@@ -60,6 +63,7 @@ pub fn client_connect(mut commands: Commands, args: Res<Args>) {
     commands.insert_resource(client);
     commands.insert_resource(transport);
     commands.insert_resource(ConnectStart { at: Instant::now(), timeout: Duration::from_secs(args.connect_timeout_secs) });
+    commands.init_resource::<TimeSync>();
     commands.init_resource::<FilteredServerState>();
 
     info!(?server_addr, "Client created and connecting");
@@ -113,6 +117,7 @@ pub fn pump_network(
                         };
                     }
                     net_stats.last_state_instant = Some(now);
+                    // Time sync handled in apply_state_to_sub where ConnectStart is available
                     net_stats.last_server_tick = latest.0.as_ref().map(|d| d.tick);
                 }
             }
@@ -147,6 +152,11 @@ pub fn pump_network(
                         };
                     }
                     net_stats.last_state_instant = Some(now);
+                    // Update time sync (simple): offset = server_ms - local_ms
+                    if let Some(ref d) = latest.0 {
+                        // Use ConnectStart.at as local epoch
+                        // We don't have it here; will update in apply_state_to_sub where we have `time` resource
+                    }
                     net_stats.last_server_tick = latest.0.as_ref().map(|d| d.tick);
                 }
             }
@@ -173,11 +183,26 @@ pub fn apply_state_to_sub(
     controls: Option<Res<crate::hud_controls::ThrustInput>>,
     time: Res<Time>,
     mut filtered: ResMut<FilteredServerState>,
+    connect: Option<Res<ConnectStart>>,
+    mut tsync: ResMut<TimeSync>,
 ) {
     let Some(my_id) = my_id.0 else { return; };
     let Some(delta) = latest.0.as_ref() else { return; };
     let Some(me) = delta.players.iter().find(|p| p.id == my_id) else { return; };
     if let Ok((entity, mut t, mut v, corr_opt)) = q_sub.single_mut() {
+        // Update time sync from delta.server_ms vs local monotonic
+        if let Some(connect) = connect {
+            let local_ms = connect.at.elapsed().as_millis() as u64;
+            if let Some(d) = latest.0.as_ref() {
+                let sample = d.server_ms as i64 - local_ms as i64;
+                let alpha = 0.1_f32;
+                let s = sample as f32;
+                tsync.offset_ms = tsync.offset_ms + alpha * (s - tsync.offset_ms);
+                tsync.last_server_ms = d.server_ms;
+            }
+        }
+        // Ensure network-driven marker present
+        commands.entity(entity).insert(crate::scene::NetControlled);
         let target_pos_raw = Vec3::new(me.position[0], me.position[1], me.position[2]);
         // Prefer full orientation from server if present
         let target_rot_raw = {

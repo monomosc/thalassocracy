@@ -3,6 +3,7 @@ use bevy_renet::renet::{RenetClient, DefaultChannel};
 use bevy_inspector_egui::bevy_egui::EguiContexts;
 use bevy_egui::{EguiPrimaryContextPass};
 use crate::sim_pause::SimPause;
+use crate::net::{ConnectStart, TimeSync};
 
 #[derive(Resource, Debug)]
 pub struct ThrustInput {
@@ -91,19 +92,29 @@ fn send_pause_request(client: Option<ResMut<RenetClient>>, paused: Res<SimPause>
     *last = Some(cur);
 }
 
-fn send_thrust_input(client: Option<ResMut<RenetClient>>, mut thrust: ResMut<ThrustInput>) {
+fn send_thrust_input(client: Option<ResMut<RenetClient>>, mut thrust: ResMut<ThrustInput>, connect: Option<Res<ConnectStart>>, tsync: Option<Res<TimeSync>>) {
     let Some(mut client) = client else { return; };
     // For now, send every frame if connected. Later: send on change or at a fixed input rate.
     if !client.is_connected() { return; }
     thrust.tick = thrust.tick.wrapping_add(1);
-    let msg = protocol::ClientToServer::InputTick(protocol::InputTick {
-        tick: thrust.tick,
-        thrust: thrust.value,
-        yaw: thrust.yaw,
-        pump_fwd: thrust.pump_fwd,
-        pump_aft: thrust.pump_aft,
-    });
-    if let Ok(bytes) = protocol::encode(&msg) {
-        client.send_message(DefaultChannel::ReliableOrdered, bytes);
+    // Compute server-time stamped event scheduled slightly ahead (30 ms) to reduce timing disagreement
+    let ahead_ms: u64 = 30;
+    if let (Some(connect), Some(tsync)) = (connect, tsync) {
+        let local_ms = connect.at.elapsed().as_millis() as u64;
+        let server_now_ms = (local_ms as i64 + tsync.offset_ms as i64).max(0) as u64;
+        let t_ms = server_now_ms + ahead_ms;
+        let ev = protocol::InputEvent { t_ms, thrust: thrust.value, yaw: thrust.yaw, pump_fwd: thrust.pump_fwd, pump_aft: thrust.pump_aft };
+        let msg = protocol::ClientToServer::InputEvent(ev);
+        if let Ok(bytes) = protocol::encode(&msg) { client.send_message(DefaultChannel::ReliableOrdered, bytes); }
+    } else {
+        // Fallback: send legacy tick message
+        let msg = protocol::ClientToServer::InputTick(protocol::InputTick {
+            tick: thrust.tick,
+            thrust: thrust.value,
+            yaw: thrust.yaw,
+            pump_fwd: thrust.pump_fwd,
+            pump_aft: thrust.pump_aft,
+        });
+        if let Ok(bytes) = protocol::encode(&msg) { client.send_message(DefaultChannel::ReliableOrdered, bytes); }
     }
 }
