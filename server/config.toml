@@ -7,7 +7,7 @@ port = 61234
 max_clients = 64
 
 # Server simulation tick rate (Hz)
-tick_hz = 30
+tick_hz = 60
 
 # Target snapshot send rate (Hz)
 snapshot_hz = 20

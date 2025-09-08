@@ -4,7 +4,6 @@ use levels::{builtins::greybox_level, sample_flow_at, Vec3f};
 const INSTR_SIZE: f32 = 140.0; // px
 const RING_THICKNESS: f32 = 2.0; // px
 const DOT_SIZE: f32 = 12.0; // px
-const MAX_REL_SPEED: f32 = 6.0; // m/s for color normalization
 const SMOOTH_ALPHA: f32 = 0.2; // EMA for dot position/color
 
 #[derive(Component)]
@@ -88,7 +87,7 @@ fn spawn_flow_instr(mut commands: Commands) {
 fn update_flow_state(
     time: Res<Time>,
     mut state: ResMut<FlowInstrState>,
-    q_sub: Query<(&Transform, &crate::scene::Velocity), With<crate::scene::Submarine>>,
+    q_sub: Query<(&Transform, &crate::scene::submarine::Velocity), With<crate::scene::submarine::Submarine>>,
 ) {
     let Ok((transform, vel)) = q_sub.single() else {
         // decay to center if no sub
@@ -132,6 +131,7 @@ fn draw_flow_instr(
     state: Res<FlowInstrState>,
     mut q_root: Query<&GlobalTransform, With<FlowInstrRing>>,
     mut q_dot: Query<(&mut Node, &mut BackgroundColor), With<FlowInstrDot>>,
+    q_spec: Query<&crate::scene::submarine::SubPhysics, With<crate::scene::submarine::Submarine>>,
 ) {
     let Ok(_ring_xform) = q_root.single_mut() else { return; };
     let Ok((mut dot_node, mut dot_color)) = q_dot.single_mut() else { return; };
@@ -145,28 +145,69 @@ fn draw_flow_instr(
     dot_node.left = Val::Px(pos_px.x);
     dot_node.top = Val::Px(INSTR_SIZE - DOT_SIZE - pos_px.y); // UI Y downwards
 
-    // Color by relative speed
-    // Color encoding: direction + magnitude of longitudinal flow
-    // Backflow (from stern): deep magenta at high |u|, red near zero
-    // Frontflow (from bow): red near zero → yellow → green at high |u|
-    let mag = state.surge.abs();
-    let t = (mag / MAX_REL_SPEED).clamp(0.0, 1.0);
-    let color = if state.surge >= 0.0 {
-        // front-coming: red -> yellow -> green
-        if t < 0.5 {
-            let k = t / 0.5;
-            // red (1,0,0) to yellow (1,1,0) => (1, k, 0)
-            Color::srgba(1.0, k, 0.0, 1.0)
+    // Color by relative speed from physics-derived thresholds
+    // Compute terminal surge speed from spec: solve 0.5*rho*cxd*A*u^2 + xu*u = t_max
+    let u_term = if let Some(spec) = q_spec.iter().next() {
+        let rho = 1025.0_f32; // seawater kg/m^3 (matches physics)
+        let a = 0.5 * rho * spec.0.cxd * spec.0.s_forward;
+        let b = spec.0.xu;
+        let t_max = spec.0.t_max.max(0.0);
+        if a > 1e-6 {
+            let disc = b * b + 4.0 * a * t_max;
+            ((-b) + disc.sqrt()) / (2.0 * a)
+        } else if b > 1e-6 {
+            // Fallback: purely linear drag
+            t_max / b
         } else {
-            let k = (t - 0.5) / 0.5;
-            // yellow (1,1,0) to green (0,1,0) => (1-k, 1, 0)
-            Color::srgba(1.0 - k, 1.0, 0.0, 1.0)
+            0.0
         }
     } else {
-        // back-coming: red -> deep magenta
-        let k = t;
-        // red (1,0,0) to magenta (0.85,0,0.85) => (1 - 0.15k, 0, 0.85k)
-        Color::srgba(1.0 - 0.15 * k, 0.0, 0.85 * k, 1.0)
+        0.0
+    };
+
+    // Thresholds: green at 2/3 Vmax; stay green until 3/2 Vmax; then shift to blue.
+    let u_green = (2.0 / 3.0) * u_term.max(0.0);
+    let u_blue_start = (3.0 / 2.0) * u_term.max(0.0);
+
+    let mag = state.surge.abs();
+    let color = if state.surge < 0.0 {
+        // Back-coming flow: magenta at strong backflow, red as it approaches zero
+        // Interpolate red (1,0,0) → magenta (1,0,1) using u_green as normalization
+        let k = if u_green > 1e-6 { (mag / u_green).clamp(0.0, 1.0) } else { 0.0 };
+        Color::srgba(1.0, 0.0, k, 1.0)
+    } else {
+        // Front-coming flow
+        if u_term <= 0.0 {
+            // No spec available: degrade gracefully red→yellow→green by a soft scaler
+            let t = (mag / 3.0).clamp(0.0, 1.0);
+            if t < 0.5 {
+                let k = t / 0.5; // red → yellow
+                Color::srgba(1.0, k, 0.0, 1.0)
+            } else {
+                let k = (t - 0.5) / 0.5; // yellow → green
+                Color::srgba(1.0 - k, 1.0, 0.0, 1.0)
+            }
+        } else if mag <= u_green {
+            // Red → yellow → green up to 2/3 Vmax
+            let t = (mag / u_green).clamp(0.0, 1.0);
+            if t < 0.5 {
+                let k = t / 0.5; // red → yellow
+                Color::srgba(1.0, k, 0.0, 1.0)
+            } else {
+                let k = (t - 0.5) / 0.5; // yellow → green
+                Color::srgba(1.0 - k, 1.0, 0.0, 1.0)
+            }
+        } else if mag <= u_blue_start {
+            // Hold green between 2/3 and 3/2 Vmax
+            Color::srgba(0.0, 1.0, 0.0, 1.0)
+        } else {
+            // Beyond 3/2 Vmax: move towards blue. Ramp to blue by 2.5× Vmax.
+            let u_blue_full = (2.5_f32) * u_term;
+            let denom = (u_blue_full - u_blue_start).max(1e-3);
+            let k = ((mag - u_blue_start) / denom).clamp(0.0, 1.0); // 0 at start, 1 at full
+            // green (0,1,0) → blue (0,0,1)
+            Color::srgba(0.0, 1.0 - k, k, 1.0)
+        }
     };
     *dot_color = BackgroundColor(color);
 }
@@ -291,7 +332,7 @@ fn spawn_ballast_hud(mut commands: Commands) {
 }
 
 fn update_ballast_hud(
-    telemetry: Option<Res<crate::scene::SubTelemetry>>,
+    telemetry: Option<Res<crate::scene::submarine::SubTelemetry>>,
     mut q_fwd: Query<&mut Node, (With<BallastFwdFill>, Without<BallastAftFill>)>,
     mut q_aft: Query<&mut Node, (With<BallastAftFill>, Without<BallastFwdFill>)>,
     mut q_txt: Query<&mut Text, With<BallastBuoyText>>,

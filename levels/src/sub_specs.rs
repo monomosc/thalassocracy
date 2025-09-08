@@ -100,8 +100,8 @@ pub mod subspecs {
             s_side,
             s_top,
             ballast_tanks: vec![
-                BallastTankSpec { pos_body: Vec3f::new( 0.9, 0.0, 0.0), capacity_kg: 80.0 }, // forward
-                BallastTankSpec { pos_body: Vec3f::new(-0.9, 0.0, 0.0), capacity_kg: 80.0 }, // aft
+                BallastTankSpec { pos_body: Vec3f::new( 0.9, 0.0, 0.0), capacity_kg: 10.0 }, // forward
+                BallastTankSpec { pos_body: Vec3f::new(-0.9, 0.0, 0.0), capacity_kg: 10.0 }, // aft
             ],
             n_ws: 0.6,
             y_delta_r: 0.04,

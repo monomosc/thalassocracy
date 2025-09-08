@@ -6,7 +6,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 
 use crate::desync_metrics::NetClientStats;
-use crate::scene::ClientPhysicsTiming;
+use crate::scene::submarine::ClientPhysicsTiming;
+use crate::scene::submarine::{NetControlled, ServerCorrection, Submarine, Velocity};
 
 use crate::Args;
 use protocol::{ClientToServer, ClientHello, ServerToClient, StateDelta, PROTOCOL_VERSION, NETCODE_PROTOCOL_ID};
@@ -173,12 +174,7 @@ pub fn apply_state_to_sub(
     my_id: Res<MyPlayerId>,
     latest: Res<LatestStateDelta>,
     mut commands: Commands,
-    mut q_sub: Query<(
-        Entity,
-        &mut Transform,
-        &mut crate::scene::Velocity,
-        Option<&mut crate::scene::ServerCorrection>,
-    ), With<crate::scene::Submarine>>,
+    mut q_sub: Query<(Entity, &mut Transform, &mut Velocity, Option<&mut ServerCorrection>), With<Submarine>>,
     mut net_stats: ResMut<NetClientStats>,
     controls: Option<Res<crate::hud_controls::ThrustInput>>,
     time: Res<Time>,
@@ -202,7 +198,7 @@ pub fn apply_state_to_sub(
             }
         }
         // Ensure network-driven marker present
-        commands.entity(entity).insert(crate::scene::NetControlled);
+        commands.entity(entity).insert(NetControlled);
         let target_pos_raw = Vec3::new(me.position[0], me.position[1], me.position[2]);
         // Prefer full orientation from server if present
         let target_rot_raw = {
@@ -255,13 +251,13 @@ pub fn apply_state_to_sub(
             t.translation = target_pos;
             t.rotation = target_rot;
             **v = target_vel;
-            commands.entity(entity).remove::<crate::scene::ServerCorrection>();
+            commands.entity(entity).remove::<ServerCorrection>();
             // Record the magnitude of snap for the desync indicator
             net_stats.last_snap_magnitude_m = raw_pos_err;
         } else if tiny {
             // Avoid micro-corrections. Drop any existing correction and gently align velocity.
             if corr_opt.is_some() {
-                commands.entity(entity).remove::<crate::scene::ServerCorrection>();
+                commands.entity(entity).remove::<ServerCorrection>();
             }
             **v = target_vel;
         } else if let Some(mut corr) = corr_opt {
@@ -272,7 +268,7 @@ pub fn apply_state_to_sub(
             // If the existing correction is near its end, keep some time to finish the new target.
             if corr.elapsed > 0.2 { corr.elapsed = 0.2; }
         } else if need_corr {
-            commands.entity(entity).insert(crate::scene::ServerCorrection {
+            commands.entity(entity).insert(ServerCorrection {
                 target_pos,
                 target_rot,
                 target_vel,

@@ -79,7 +79,7 @@ impl Plugin for DesyncMetricsPlugin {
 
 /// Read current ServerCorrection (if any) and produce raw errors.
 fn sample_reconcile_errors(
-    q_sub: Query<(&Transform, &crate::scene::Velocity, Option<&crate::scene::ServerCorrection>), With<crate::scene::Submarine>>,
+    q_sub: Query<(&Transform, &crate::scene::submarine::Velocity, Option<&crate::scene::submarine::ServerCorrection>), With<crate::scene::submarine::Submarine>>,
     mut errs: ResMut<ReconcileErrors>,
 ) {
     let Ok((t, v, corr)) = q_sub.single() else { return; };

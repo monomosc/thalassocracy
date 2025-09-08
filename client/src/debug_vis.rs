@@ -3,7 +3,8 @@ use bevy::pbr::wireframe::WireframeConfig;
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 use bevy_inspector_egui::InspectorOptions;
 use levels::{sample_flow_at, Vec3f, builtins::greybox_level};
-use crate::scene::{Submarine, Velocity, SimSet};
+use crate::scene::SimSet;
+use crate::scene::submarine::{Submarine, Velocity, SubTelemetry};
 
 #[derive(Resource, Debug, Clone, Reflect, InspectorOptions)]
 #[reflect(Resource)]
@@ -19,7 +20,7 @@ pub struct DebugVis {
 
 impl Default for DebugVis {
     fn default() -> Self {
-        Self { labels: true, wireframe_global: false, flow_arrows: true, overlay: true, speed_arrow: true, telemetry: false, desync_indicator: true }
+        Self { labels: true, wireframe_global: false, flow_arrows: false, overlay: true, speed_arrow: true, telemetry: false, desync_indicator: true }
     }
 }
 
@@ -90,10 +91,10 @@ fn update_debug_overlay(
     time: Res<Time>,
     mut last: Local<OverlayLastYaw>,
     mut q_text: Query<&mut Text, With<DebugOverlayNode>>,
-    q_sub: Query<(&Transform, &crate::scene::Velocity), With<crate::scene::Submarine>>,
+    q_sub: Query<(&Transform, &Velocity), With<Submarine>>,
     controls: Option<Res<crate::hud_controls::ThrustInput>>,
     vis: Res<DebugVis>,
-    telemetry: Option<Res<crate::scene::SubTelemetry>>,
+    telemetry: Option<Res<SubTelemetry>>,
     pause: Option<Res<crate::sim_pause::SimPause>>,
     desync: Option<Res<crate::desync_metrics::DesyncMetrics>>,
 ) {
