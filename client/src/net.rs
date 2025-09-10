@@ -154,7 +154,7 @@ pub fn pump_network(
                     }
                     net_stats.last_state_instant = Some(now);
                     // Update time sync (simple): offset = server_ms - local_ms
-                    if let Some(ref d) = latest.0 {
+                    if let Some(ref _d) = latest.0 {
                         // Use ConnectStart.at as local epoch
                         // We don't have it here; will update in apply_state_to_sub where we have `time` resource
                     }

@@ -1,8 +1,10 @@
 use bevy::color::{LinearRgba, Srgba};
+use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSamplerDescriptor};
 use bevy::math::primitives::{Cuboid, Sphere, Plane3d};
 use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
 use bevy::math::{Affine2, Vec2};
+use tracing::info;
 
 use crate::debug_vis::DebugVis;
 use levels::{builtins::greybox_level, FlowFieldSpec, LevelSpec, Vec3f};
@@ -57,7 +59,7 @@ pub fn spawn_greybox(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
+    asset_server: Res<AssetServer>
 ) {
     // Convert helpers
     fn v(v: Vec3f) -> Vec3 {
@@ -178,17 +180,24 @@ pub fn spawn_greybox(
             .id();
 
         // Use the provided rock albedo; disable depth_map for now to avoid sampler type mismatch from 16-bit PNG
-        let tex_albedo: Handle<Image> = asset_server.load("textures/rock_face_03_diff_4k.jpg");
+        let tex_albedo: Handle<Image> = asset_server.load_with_settings("textures/rock_face_03_diff_4k.jpg", | settings: &mut ImageLoaderSettings| {
+            settings.sampler = bevy::image::ImageSampler::Descriptor(ImageSamplerDescriptor {
+                            address_mode_u: ImageAddressMode::Repeat,
+                            address_mode_v: ImageAddressMode::Repeat,
+                            address_mode_w: ImageAddressMode::Repeat,
+                            ..default()
+                        });
+        });
 
         // Helper to build a material with custom UV tiling and optional flips
         let mut make_mat = |repeats: Vec2, flip_x: bool, flip_y: bool| {
             let mut uv = Affine2::from_scale(repeats);
-            if flip_x { uv = StandardMaterial::FLIP_HORIZONTAL * uv; }
-            if flip_y { uv = StandardMaterial::FLIP_VERTICAL * uv; }
+            if flip_x { uv = StandardMaterial::FLIP_VERTICAL * uv; }
+            if flip_y { uv = StandardMaterial::FLIP_HORIZONTAL * uv; }
             materials.add(StandardMaterial {
                 base_color: Color::WHITE,
                 base_color_texture: Some(tex_albedo.clone()),
-                metallic: 0.0,
+                metallic: 0.1,
                 perceptual_roughness: 0.95,
                 // Ensure interior faces render correctly when viewed from inside the tunnel
                 cull_mode: None,
@@ -199,13 +208,13 @@ pub fn spawn_greybox(
         };
 
         // Repeats tuned per face to avoid stretching on long axes
-        let rx = (tunnel_size.x / 3.0).max(100.0); // more repeats along the long axis
-        let rz = (tunnel_size.z / 2.0).max(15.0);
-        let ry = (tunnel_size.y / 2.0).max(15.0);
+        let rx = 2.0;
+        let rz = 1.0;
+        let ry = 1.0;
         let mat_floor = make_mat(Vec2::new(rx, rz), false, false);
-        let mat_ceil = make_mat(Vec2::new(rx, rz), false, true); // flip to reduce obvious repetitions
+        let mat_ceil = make_mat(Vec2::new(rx, rz), false, false); // flip to reduce obvious repetitions
         let mat_wall_pz = make_mat(Vec2::new(rx, ry), false, false);
-        let mat_wall_nz = make_mat(Vec2::new(rx, ry), true, false); // mirrored to break symmetry seams
+        let mat_wall_nz = make_mat(Vec2::new(rx, ry), false, false); // mirrored to break symmetry seams
         let half = tunnel_size * 0.5;
 
         // Helper to spawn a single textured plane as a child (avoids cuboid UV issues)
@@ -448,11 +457,11 @@ pub fn spawn_greybox(
             .looking_at(light_pos + Vec3::X, Vec3::Y);
         commands.spawn((
             SpotLight {
-                color: Color::srgb(0.90, 0.97, 1.0),
-                intensity: 90_000.0, // brighter for longer throw
-                range: 60.0,
-                inner_angle: 0.15,
-                outer_angle: 0.25,
+                color: Color::srgb(1.00, 1.00, 1.0),
+                intensity: 900_000.0, // brighter for longer throw
+                range: 100.0,
+                inner_angle: 0.11,
+                outer_angle: 0.18,
                 shadows_enabled: true,
                 ..Default::default()
             },

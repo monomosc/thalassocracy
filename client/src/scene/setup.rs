@@ -1,3 +1,4 @@
+use bevy::core_pipeline::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::math::primitives::Cuboid;
 use bevy::pbr::{MeshMaterial3d, StandardMaterial, DistanceFog, FogFalloff};
@@ -58,13 +59,18 @@ pub fn setup_scene(mut commands: Commands) {
     // Follow camera with fog and tonemapping.
     commands.spawn((
         Camera3d { depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING).into(), ..Default::default() },
+        Camera {
+            hdr: true,
+            ..default()
+        },
+        Bloom::OLD_SCHOOL,
         // Subtle blue‑green fog tuned for underwater caves.
         DistanceFog {
             color: Color::srgb(0.04, 0.11, 0.12),
             falloff: FogFalloff::Exponential { density: 0.05 },
             ..Default::default()
         },
-        Tonemapping::AcesFitted,
+        Tonemapping::TonyMcMapface,
         Msaa::Off,
         Transform::from_xyz(0.0, 4.0, 10.0),
         GlobalTransform::default(),

@@ -1,11 +1,14 @@
 use bevy::prelude::*;
-use bevy::pbr::{MeshMaterial3d, NotShadowCaster, StandardMaterial};
+use bevy::asset::load_internal_asset;
+use bevy::prelude::Shader;
+use bevy::pbr::{MaterialPlugin, MeshMaterial3d, NotShadowCaster, StandardMaterial};
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy::prelude::AlphaMode;
 
 use super::camera::{CameraMode, FollowCam};
 use super::submarine::Submarine;
+use super::volumetric_cone_material::{VolumetricConeMaterial, VOLUMETRIC_CONE_SHADER_HANDLE};
 use crate::scene::world::{FlowField, Tunnel, TunnelBounds};
 
 // ---------- Plugin ----------
@@ -14,7 +17,11 @@ pub struct WaterFxPlugin;
 
 impl Plugin for WaterFxPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<UnderwaterAssets>()
+        // Register the shader for the custom volumetric cone material
+        load_internal_asset!(app, VOLUMETRIC_CONE_SHADER_HANDLE, "volumetric_cone_material.wgsl", Shader::from_wgsl);
+
+        app.add_plugins(MaterialPlugin::<VolumetricConeMaterial>::default())
+            .init_resource::<UnderwaterAssets>()
             .init_resource::<UnderwaterSettings>()
             .add_systems(Startup, setup_underwater_assets)
             .add_systems(
@@ -40,7 +47,7 @@ pub struct UnderwaterAssets {
     mote_mat: Handle<StandardMaterial>,
     bubble_mesh: Handle<Mesh>,
     bubble_mat: Handle<StandardMaterial>,
-    cone_mat: Handle<StandardMaterial>,
+    cone_mat: Handle<VolumetricConeMaterial>,
     cone_mesh: Handle<Mesh>,
     halo_mesh: Handle<Mesh>,
     halo_mat: Handle<StandardMaterial>,
@@ -62,6 +69,7 @@ impl Default for UnderwaterSettings {
 fn setup_underwater_assets(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut cone_mats: ResMut<Assets<VolumetricConeMaterial>>,
     mut assets: ResMut<UnderwaterAssets>,
 ) {
     // Tiny unlit sphere for dust motes
@@ -84,13 +92,20 @@ fn setup_underwater_assets(
         ..Default::default()
     });
 
-    // Additive, unlit blue-green for the volumetric cone
-    let cone_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.25, 0.8, 1.0).with_alpha(0.12),
-        emissive: LinearRgba::new(0.18, 0.6, 0.9, 0.0),
-        unlit: true,
+    // Additive, unlit volumetric cone material (custom shader)
+    let cone_mat = cone_mats.add(VolumetricConeMaterial {
+        color: LinearRgba::new(0.18, 0.6, 0.9, 0.12),
+        // Absorb more red, some green, little blue; mild fresnel
+        params0: Vec4::new(2.2, 1.0, 0.6, 0.6),
+        // noise_strength, noise_scale, falloff_pow, edge_soften
+        params1: Vec4::new(0.25, 8.0, 1.2, 0.08),
+        // low/mid/high flicker amplitudes (small)
+        flicker_amps: Vec4::new(0.05, 0.03, 0.02, 0.0),
+        // low/mid/high flicker frequencies in Hz
+        flicker_freqs: Vec4::new(0.27, 1.3, 7.7, 0.0),
+        flicker_phases: Vec4::ZERO,
+        hdr_params: Vec4::new(1.0, 0.0, 0.0, 0.0),
         alpha_mode: AlphaMode::Add,
-        ..Default::default()
     });
 
     // Volumetric halo for point lights
@@ -155,7 +170,7 @@ fn ensure_mote_field(
     assets: Res<UnderwaterAssets>,
 ) {
     if q_field.iter().next().is_some() { return; }
-    let Ok((_cam_e, cam_t)) = q_cam.get_single() else { return; };
+    let Ok((_cam_e, cam_t)) = q_cam.single() else { return; };
 
     let radius = 8.0_f32;
     let count = 160_usize;
@@ -203,16 +218,16 @@ fn tick_motes(
     mut q_motes: Query<(&mut Transform, &mut UnderwaterMote), (Without<Camera3d>, Without<MoteField>)>,
     q_flow: Query<(&GlobalTransform, &FlowField, &TunnelBounds), With<Tunnel>>,
 ) {
-    let Ok(cam_t) = q_cam.get_single() else { return; };
+    let Ok(cam_t) = q_cam.single() else { return; };
     let dt = time.delta_secs().clamp(0.0, 0.05);
 
-    if let Ok((mut field_t, field)) = q_field.get_single_mut() {
+    if let Ok((mut field_t, field)) = q_field.single_mut() {
         // Keep field centered on camera smoothly
         let lerp = 1.0 - (-4.0 * dt).exp();
         field_t.translation = field_t.translation.lerp(cam_t.translation, lerp);
 
         // Sample first flow field if available
-        let flow = if let Ok((_gt, ff, _tb)) = q_flow.get_single() {
+        let flow = if let Ok((_gt, ff, _tb)) = q_flow.single() {
             let (v, variance) = ff.sample(field_t.translation, time.elapsed_secs());
             v + Vec3::new(0.0, 0.05 + variance * 0.02, 0.0)
         } else {
@@ -257,7 +272,7 @@ fn ensure_bubble_emitter(
     q_sub: Query<Entity, With<Submarine>>,
 ) {
     if q_emit.single().is_ok() { return; }
-    let Ok(sub_e) = q_sub.get_single() else { return; };
+    let Ok(sub_e) = q_sub.single() else { return; };
     commands.entity(sub_e).insert(BubbleEmitter { cooldown: 0.1 });
 }
 
@@ -269,7 +284,7 @@ fn spawn_bubbles(
     settings: Option<Res<UnderwaterSettings>>,
 ) {
     if !settings.map(|s| s.bubbles_enabled).unwrap_or(false) { return; }
-    let Ok((mut em, gt)) = q_emit.get_single_mut() else { return; };
+    let Ok((mut em, gt)) = q_emit.single_mut() else { return; };
     let dt = time.delta_secs();
     em.cooldown -= dt;
     if em.cooldown > 0.0 { return; }
@@ -326,10 +341,11 @@ struct VolumetricHalo;
 fn attach_or_update_volumetrics(
     mut commands: Commands,
     mut q_spot: Query<(Entity, &SpotLight, Option<&Children>)>,
-    mut q_cone: Query<(Entity, &mut Transform), (With<VolumetricCone>, Without<VolumetricHalo>)>,
+    mut q_cone: Query<(Entity, &mut Transform, &MeshMaterial3d<VolumetricConeMaterial>), (With<VolumetricCone>, Without<VolumetricHalo>)>,
     mut q_point: Query<(Entity, &PointLight, Option<&Children>)>,
     mut q_halo: Query<(Entity, &mut Transform), (With<VolumetricHalo>, Without<VolumetricCone>)>,
     assets: Res<UnderwaterAssets>,
+    mut cone_mats: ResMut<Assets<VolumetricConeMaterial>>,
     settings: Option<Res<UnderwaterSettings>>,
     render_settings: Option<Res<crate::render_settings::RenderSettings>>,
 ) {
@@ -337,7 +353,7 @@ fn attach_or_update_volumetrics(
     if let Some(v) = render_settings { 
         if !v.volumetric_cones { 
             // Despawn any existing volumetric proxies when disabled
-            for (e, _) in &mut q_cone { commands.entity(e).despawn(); }
+            for (e, _, _) in &mut q_cone { commands.entity(e).despawn(); }
             for (e, _) in &mut q_halo { commands.entity(e).despawn(); }
             return; 
         } 
@@ -361,15 +377,80 @@ fn attach_or_update_volumetrics(
         let cone_t = Transform::from_translation(-Vec3::Z * height * 0.01)
             .with_scale(Vec3::new(radius, radius, height));
 
+        // Map light intensity to alpha scaling for the volumetric material
+        let intensity = light.intensity.max(0.0);
+        // Map light intensity to emission boost (HDR). Keep alpha more conservative.
+        let emissive_boost = (intensity / 200_000.0).powf(0.75).clamp(0.02, 12.0);
+        let alpha_scale = (intensity / 200_000.0).powf(0.5).clamp(0.01, 0.9);
+
         match cone_e {
             Some(c) => {
-                if let Ok((_ce, mut t)) = q_cone.get_mut(c) { *t = cone_t; }
+                if let Ok((_ce, mut t, mat_handle)) = q_cone.get_mut(c) {
+                    *t = cone_t;
+                    // Compute target alpha from base material before mutating
+                    let base_alpha = {
+                        if let Some(base) = cone_mats.get(&assets.cone_mat) {
+                            base.color.alpha
+                        } else if let Some(cur) = cone_mats.get(&**mat_handle) {
+                            cur.color.alpha
+                        } else {
+                            VolumetricConeMaterial::default().color.alpha
+                        }
+                    };
+                    // Determine deterministic phases based on light entity id
+                    let mut seed = e.index() as u32 ^ 0x9E37_79B9;
+                    let mut frand = || {
+                        seed ^= seed << 13;
+                        seed ^= seed >> 17;
+                        seed ^= seed << 5;
+                        (seed as f32 / u32::MAX as f32)
+                    };
+                    let phase_low = frand() * std::f32::consts::TAU;
+                    let phase_mid = frand() * std::f32::consts::TAU;
+                    let phase_high = frand() * std::f32::consts::TAU;
+                    if let Some(mat) = cone_mats.get_mut(&**mat_handle) {
+                        mat.color.alpha = (base_alpha * alpha_scale).clamp(0.0, 1.0);
+                        mat.hdr_params.x = emissive_boost;
+                        // Initialize phases once if still zero
+                        if mat.flicker_phases == Vec4::ZERO {
+                            mat.flicker_phases = Vec4::new(phase_low, phase_mid, phase_high, 0.0);
+                        }
+                    }
+                }
             }
             None => {
+                // Create a unique material instance for this cone with alpha scaled by light intensity
+                // Generate deterministic phases for this light
+                let mut seed = e.index() as u32 ^ 0x9E37_79B9;
+                let mut frand = || {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 17;
+                    seed ^= seed << 5;
+                    (seed as f32 / u32::MAX as f32)
+                };
+                let phase_low = frand() * std::f32::consts::TAU;
+                let phase_mid = frand() * std::f32::consts::TAU;
+                let phase_high = frand() * std::f32::consts::TAU;
+
+                let new_mat_handle = if let Some(base) = cone_mats.get(&assets.cone_mat).cloned() {
+                    let mut m = base;
+                    m.color.alpha = (m.color.alpha * alpha_scale).clamp(0.0, 1.0);
+                    m.hdr_params.x = emissive_boost;
+                    m.flicker_phases = Vec4::new(phase_low, phase_mid, phase_high, 0.0);
+                    cone_mats.add(m)
+                } else {
+                    // Fallback: create default
+                    let mut m = VolumetricConeMaterial::default();
+                    m.color.alpha = (m.color.alpha * alpha_scale).clamp(0.0, 1.0);
+                    m.hdr_params.x = emissive_boost;
+                    m.flicker_phases = Vec4::new(phase_low, phase_mid, phase_high, 0.0);
+                    cone_mats.add(m)
+                };
+
                 let id = commands
                     .spawn((
                         Mesh3d(assets.cone_mesh.clone()),
-                        MeshMaterial3d(assets.cone_mat.clone()),
+                        MeshMaterial3d(new_mat_handle),
                         cone_t,
                         GlobalTransform::default(),
                         VolumetricCone,

@@ -6,6 +6,7 @@ pub mod submarine;
 pub mod camera;
 pub mod water;
 pub mod postprocess;
+pub mod volumetric_cone_material;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SimSet;
