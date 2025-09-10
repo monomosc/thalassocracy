@@ -23,6 +23,8 @@ impl Plugin for WaterFxPlugin {
         app.add_plugins(MaterialPlugin::<VolumetricConeMaterial>::default())
             .init_resource::<UnderwaterAssets>()
             .init_resource::<UnderwaterSettings>()
+            .register_type::<VolumetricCone>()
+            .register_type::<VolumetricConeMaterial>()
             .add_systems(Startup, setup_underwater_assets)
             .add_systems(
                 Update,
@@ -104,8 +106,9 @@ fn setup_underwater_assets(
         // low/mid/high flicker frequencies in Hz
         flicker_freqs: Vec4::new(0.27, 1.3, 7.7, 0.0),
         flicker_phases: Vec4::ZERO,
-        hdr_params: Vec4::new(1.0, 0.0, 0.0, 0.0),
+        hdr_params: Vec4::new(30.0, 0.0, 0.0, 0.0),
         alpha_mode: AlphaMode::Add,
+        fog_enabled: true,
     });
 
     // Volumetric halo for point lights
@@ -332,7 +335,7 @@ fn tick_bubbles(
 
 // ---------- Volumetric proxies for lights ----------
 
-#[derive(Component)]
+#[derive(Component, Debug, Reflect)]
 struct VolumetricCone;
 
 #[derive(Component)]
@@ -374,14 +377,14 @@ fn attach_or_update_volumetrics(
         let radius = (height * light.outer_angle.tan()).max(0.01);
         // Our unit cone points along -Z with apex at origin and base at z=-1.
         // Place it in front of the light along local -Z.
-        let cone_t = Transform::from_translation(-Vec3::Z * height * 0.01)
+        let cone_t = Transform::from_translation(-Vec3::Z * height * 0.001)
             .with_scale(Vec3::new(radius, radius, height));
 
         // Map light intensity to alpha scaling for the volumetric material
         let intensity = light.intensity.max(0.0);
         // Map light intensity to emission boost (HDR). Keep alpha more conservative.
-        let emissive_boost = (intensity / 200_000.0).powf(0.75).clamp(0.02, 12.0);
-        let alpha_scale = (intensity / 200_000.0).powf(0.5).clamp(0.01, 0.9);
+        let emissive_boost = (intensity / 10_000_000.0).powf(0.75).clamp(0.02, 600.0);
+        let alpha_scale = (intensity / 100_000.0).powf(0.5).clamp(0.01, 0.95);
 
         match cone_e {
             Some(c) => {
@@ -426,7 +429,7 @@ fn attach_or_update_volumetrics(
                     seed ^= seed << 13;
                     seed ^= seed >> 17;
                     seed ^= seed << 5;
-                    (seed as f32 / u32::MAX as f32)
+                    seed as f32 / u32::MAX as f32
                 };
                 let phase_low = frand() * std::f32::consts::TAU;
                 let phase_mid = frand() * std::f32::consts::TAU;
@@ -498,7 +501,7 @@ fn attach_or_update_volumetrics(
 
 // Unit cone along -Z: apex at (0,0,0), base circle at z=-1, radius=1
 fn make_unit_cone_negz(segments: usize) -> Mesh {
-    let segments = segments.max(3);
+    let segments = segments.max(30);
     let mut positions = Vec::with_capacity(segments + 1);
     let mut normals = Vec::with_capacity(segments + 1);
     let mut uvs = Vec::with_capacity(segments + 1);

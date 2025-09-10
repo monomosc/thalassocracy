@@ -29,7 +29,7 @@ pub fn greybox_level() -> LevelSpec {
             size: Vec3f::new(tunnel_len, tunnel_h, tunnel_w),
             pos: tunnel_pos,
             shell_thickness: wall_thick,
-            flow: FlowFieldSpec::Uniform { flow: Vec3f::new(2.5, 0.0, 0.0), variance: 0.2 },
+            flow: FlowFieldSpec::Uniform { flow: Vec3f::new(1.5, 0.0, 0.0), variance: 0.2 },
         },
         chamber: ChamberSpec {
             size: chamber_size,

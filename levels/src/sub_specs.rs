@@ -87,7 +87,7 @@ pub mod subspecs {
             t_max: 1200.0, // N
             tau_thr: 2.5, // s
             // Rudder effectiveness
-            n_delta_r: 0.006,
+            n_delta_r: 0.003,
             // Weathervane effectiveness
             n_beta: 0.10,
             m_delta_b: 1200.0,
@@ -100,8 +100,8 @@ pub mod subspecs {
             s_side,
             s_top,
             ballast_tanks: vec![
-                BallastTankSpec { pos_body: Vec3f::new( 0.9, 0.0, 0.0), capacity_kg: 10.0 }, // forward
-                BallastTankSpec { pos_body: Vec3f::new(-0.9, 0.0, 0.0), capacity_kg: 10.0 }, // aft
+                BallastTankSpec { pos_body: Vec3f::new( 0.9, 0.0, 0.0), capacity_kg: 12.0 }, // forward
+                BallastTankSpec { pos_body: Vec3f::new(-0.9, 0.0, 0.0), capacity_kg: 12.0 }, // aft
             ],
             n_ws: 0.6,
             y_delta_r: 0.04,

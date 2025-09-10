@@ -208,9 +208,9 @@ pub fn spawn_greybox(
         };
 
         // Repeats tuned per face to avoid stretching on long axes
-        let rx = 2.0;
-        let rz = 1.0;
-        let ry = 1.0;
+        let rx = 8.0;
+        let rz = 2.0;
+        let ry = 2.0;
         let mat_floor = make_mat(Vec2::new(rx, rz), false, false);
         let mat_ceil = make_mat(Vec2::new(rx, rz), false, false); // flip to reduce obvious repetitions
         let mat_wall_pz = make_mat(Vec2::new(rx, ry), false, false);
@@ -271,7 +271,7 @@ pub fn spawn_greybox(
             // Range sized to cross-section diagonal
             let cross_diag = (tunnel_size.y.hypot(tunnel_size.z)).max(1.0);
             let range = cross_diag * 0.74;
-            let intensity = 1200.0; // relatively small accent lights
+            let intensity = 4200.0; // relatively small accent lights
             let color = Color::srgb(0.85, 0.95, 1.0);
             let inner = 0.15f32;
             let outer = 0.25f32;
@@ -458,10 +458,10 @@ pub fn spawn_greybox(
         commands.spawn((
             SpotLight {
                 color: Color::srgb(1.00, 1.00, 1.0),
-                intensity: 900_000.0, // brighter for longer throw
-                range: 100.0,
-                inner_angle: 0.11,
-                outer_angle: 0.18,
+                intensity: 1_200_000_000.0, // brighter for longer throw
+                range: 600.0,
+                inner_angle: 0.04,
+                outer_angle: 0.08,
                 shadows_enabled: true,
                 ..Default::default()
             },

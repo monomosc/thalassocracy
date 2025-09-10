@@ -1,9 +1,7 @@
-use std::primitive;
-
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
-use bevy::pbr::Material;
+use bevy::pbr::{Material, MeshPipelineViewLayoutKey};
 use bevy::prelude::Shader;
 use bevy::asset::Handle;
 
@@ -14,7 +12,7 @@ use bevy::asset::Handle;
 // - View-angle brightening (simple Fresnel-like term)
 // - 3D noise modulation (world-space) to break up smoothness
 // - Edge smoothing near apex/base
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+#[derive(Asset, AsBindGroup, Debug, Clone, Reflect)]
 pub struct VolumetricConeMaterial {
     // Base color/intensity (alpha is overall intensity multiplier)
     #[uniform(0)]
@@ -43,6 +41,7 @@ pub struct VolumetricConeMaterial {
     // HDR/emissive boost multiplier (x component). yzw unused/reserved.
     #[uniform(6)]
     pub hdr_params: Vec4,
+    pub fog_enabled: bool, // This controls the FOG define
 
     // Blending mode
     pub alpha_mode: AlphaMode,
@@ -63,8 +62,9 @@ impl Default for VolumetricConeMaterial {
             // default phases 0; per-spot randomized at spawn
             flicker_phases: Vec4::ZERO,
             // emissive boost default 1.0
-            hdr_params: Vec4::new(1.0, 0.0, 0.0, 0.0),
+            hdr_params: Vec4::new(6.0, 0.0, 0.0, 0.0),
             alpha_mode: AlphaMode::Add,
+            fog_enabled: true,
         }
     }
 }
@@ -75,12 +75,20 @@ impl Material for VolumetricConeMaterial {
     fn alpha_mode(&self) -> AlphaMode { self.alpha_mode }
 
     fn specialize(
-            _pipeline: &bevy::pbr::MaterialPipeline<Self>,
+            pipeline: &bevy::pbr::MaterialPipeline<Self>,
             descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
             _layout: &bevy::render::mesh::MeshVertexBufferLayoutRef,
-            _key: bevy::pbr::MaterialPipelineKey<Self>,
+            key: bevy::pbr::MaterialPipelineKey<Self>,
         ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
             descriptor.primitive.cull_mode = None;
+            
+            
+            // let view_key = MeshPipelineViewLayoutKey::from(key.mesh_key);
+            // let view_layout = pipeline.mesh_pipeline.view_layouts.get_view_layout(view_key);
+            // descriptor.layout.insert(1, view_layout.clone());
+
+            // descriptor.fragment.as_mut().unwrap().shader_defs.push(bevy::render::render_resource::ShaderDefVal::Bool("DISTANCE_FOG".into(), true));
+
             Ok(())
     }
 }

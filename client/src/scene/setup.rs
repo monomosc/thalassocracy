@@ -47,7 +47,7 @@ pub fn setup_scene(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             color: Color::srgb(0.65, 0.8, 0.9),
-            illuminance: 3_500.0,
+            illuminance: 100.0, //very dim, the floodlight works OK for now
             shadows_enabled: false,
             ..Default::default()
         },
@@ -67,17 +67,17 @@ pub fn setup_scene(mut commands: Commands) {
         // Subtle blue‑green fog tuned for underwater caves.
         DistanceFog {
             color: Color::srgb(0.04, 0.11, 0.12),
-            falloff: FogFalloff::Exponential { density: 0.05 },
+            falloff: FogFalloff::Exponential { density: 0.10 },
             ..Default::default()
         },
         Tonemapping::TonyMcMapface,
         Msaa::Off,
-        Transform::from_xyz(0.0, 4.0, 10.0),
+        Transform::from_xyz(-0.1, 0.0, 0.0),
         GlobalTransform::default(),
         FollowCam {
-            distance: 7.0,
-            height: 2.2,
-            stiffness: 6.0,
+            distance: -0.01,
+            height: 0.01,
+            stiffness: 10.0,
         },
         FollowCamState { last_dir: Vec3::NEG_X },
         CameraMode { free: false },

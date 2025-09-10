@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy::asset::AssetPlugin;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{RenderCreation, WgpuSettings, InstanceFlags, Backends, PowerPreference};
+use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_renet::{netcode::NetcodeClientPlugin, RenetClientPlugin};
 use clap::Parser;
 use bevy::pbr::wireframe::WireframePlugin;
