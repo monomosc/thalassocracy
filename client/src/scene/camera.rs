@@ -28,6 +28,7 @@ pub struct FollowCamState {
 
 use super::submarine::Submarine;
 
+#[allow(clippy::type_complexity)]
 pub fn update_game_camera(
     time: Res<Time>,
     q_sub: Query<&Transform, With<Submarine>>,

@@ -20,7 +20,7 @@ pub struct DebugVis {
 
 impl Default for DebugVis {
     fn default() -> Self {
-        Self { labels: true, wireframe_global: false, flow_arrows: false, overlay: true, speed_arrow: false, telemetry: true, desync_indicator: true }
+        Self { labels: false, wireframe_global: false, flow_arrows: false, overlay: true, speed_arrow: false, telemetry: true, desync_indicator: true }
     }
 }
 

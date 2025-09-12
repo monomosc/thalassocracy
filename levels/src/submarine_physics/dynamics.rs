@@ -293,3 +293,55 @@ fn compute_cg_body_current(spec: &SubPhysicsSpec, state: &SubState) -> (Vec3f, f
         (Vec3f::new(0.0, 0.0, 0.0), 0.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BallastTankSpec};
+
+    fn spec_with_two_tanks() -> SubPhysicsSpec {
+        let mut s = crate::subspecs::small_skiff_spec();
+        // Override to two symmetric tanks on +X and -X with round numbers
+        s.m = 100.0;
+        s.ballast_tanks = vec![
+            BallastTankSpec { pos_body: Vec3f::new(1.0, 0.0, 0.0), capacity_kg: 20.0 },
+            BallastTankSpec { pos_body: Vec3f::new(-1.0, 0.0, 0.0), capacity_kg: 20.0 },
+        ];
+        s
+    }
+
+    fn base_state() -> SubState {
+        SubState {
+            position: Vec3f::new(0.0, 0.0, 0.0),
+            velocity: Vec3f::new(0.0, 0.0, 0.0),
+            orientation: Quatf::from_rotation_y(0.0),
+            ang_mom: Vec3f::new(0.0, 0.0, 0.0),
+            ballast_fill: vec![0.0, 0.0],
+        }
+    }
+
+    #[test]
+    fn cg_shifts_toward_filled_tank() {
+        let spec = spec_with_two_tanks();
+        let mut state = base_state();
+        // Fill only the +X tank
+        state.ballast_fill = vec![1.0, 0.0];
+        let (cg, m_total) = compute_cg_body_current(&spec, &state);
+        // total mass = hull + 20 kg
+        assert!((m_total - (spec.m + 20.0)).abs() < 1e-6);
+        // cg.x = (20*1) / (hull + 20)
+        let expected_x = 20.0 / (spec.m + 20.0);
+        assert!((cg.x - expected_x).abs() < 1e-6, "cg.x={}, expected={}", cg.x, expected_x);
+        assert!(cg.y.abs() < 1e-6 && cg.z.abs() < 1e-6);
+    }
+
+    #[test]
+    fn cg_balanced_when_both_equal() {
+        let spec = spec_with_two_tanks();
+        let mut state = base_state();
+        state.ballast_fill = vec![1.0, 1.0];
+        let (cg, m_total) = compute_cg_body_current(&spec, &state);
+        assert!((m_total - (spec.m + 40.0)).abs() < 1e-6);
+        assert!(cg.length() < 1e-6, "cg should be at origin when symmetric");
+    }
+}

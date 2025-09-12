@@ -1,10 +1,7 @@
-use bevy::core_pipeline::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::math::primitives::Cuboid;
-use bevy::pbr::{MeshMaterial3d, StandardMaterial, DistanceFog, FogFalloff};
-use bevy::render::render_resource::TextureUsages;
+use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::Mesh3d;
-use bevy::core_pipeline::tonemapping::Tonemapping;
 
 // Cameras are spawned in world.rs (single unified camera)
 

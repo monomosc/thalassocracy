@@ -64,3 +64,56 @@ pub fn sample_flow_at(level: &LevelSpec, pos: Vec3f, time: f32) -> (Vec3f, f32) 
     (flow, variance)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::{greybox_level, torus_two_exit_level};
+
+    #[test]
+    fn tunnel_aabb_sampling() {
+        let level = greybox_level();
+        let center = level.tunnel.pos;
+        let (flow, var) = sample_flow_at(&level, center, 0.0);
+        match level.tunnel.flow {
+            FlowFieldSpec::Uniform { flow: f, variance: v } => {
+                assert!((flow.x - f.x).abs() < 1e-6);
+                assert!((flow.y - f.y).abs() < 1e-6);
+                assert!((flow.z - f.z).abs() < 1e-6);
+                assert!((var - v).abs() < 1e-6);
+            }
+        }
+        // Outside the tunnel bounds: offset in Z beyond half-width
+        let half_w = level.tunnel.size.z * 0.5;
+        let outside = Vec3f::new(center.x, center.y, center.z + half_w + 10.0);
+        let (flow2, var2) = sample_flow_at(&level, outside, 0.0);
+        assert!(flow2.length() < 1e-6 && var2.abs() < 1e-6);
+    }
+
+    #[test]
+    fn average_when_inside_torus_and_tunnel() {
+        let level = torus_two_exit_level();
+        let center = level.tunnel.pos;
+        // Pick a point on the torus ring: +major_radius along +X from ring center
+        let t = level.torus_tunnel.as_ref().unwrap();
+        let pos_on_ring = Vec3f::new(center.x + t.major_radius, center.y, center.z);
+        let (flow, var) = sample_flow_at(&level, pos_on_ring, 0.0);
+
+        // Expect average of tunnel and torus uniform flows/variances
+        let (tunnel_flow, tunnel_var) = match level.tunnel.flow {
+            FlowFieldSpec::Uniform { flow, variance } => (flow, variance),
+        };
+        let (ring_flow, ring_var) = match t.flow {
+            FlowFieldSpec::Uniform { flow, variance } => (flow, variance),
+        };
+        let expected = Vec3f::new(
+            0.5 * (tunnel_flow.x + ring_flow.x),
+            0.5 * (tunnel_flow.y + ring_flow.y),
+            0.5 * (tunnel_flow.z + ring_flow.z),
+        );
+        let expected_var = 0.5 * (tunnel_var + ring_var);
+        assert!((flow.x - expected.x).abs() < 1e-5);
+        assert!((flow.y - expected.y).abs() < 1e-5);
+        assert!((flow.z - expected.z).abs() < 1e-5);
+        assert!((var - expected_var).abs() < 1e-5);
+    }
+}

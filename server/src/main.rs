@@ -1,4 +1,3 @@
-use std::f32::consts::PI;
 use std::net::UdpSocket;
 use std::collections::HashMap;
 use std::path::PathBuf;

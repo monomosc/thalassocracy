@@ -24,6 +24,9 @@ pub struct Rudder;
 pub struct SubPhysics(pub SubPhysicsSpec);
 
 #[derive(Component, Debug, Clone)]
+pub struct SubStateComp(pub SubState);
+
+#[derive(Component, Debug, Clone)]
 #[allow(dead_code)]
 pub struct ServerCorrection {
     pub target_pos: Vec3,
@@ -62,6 +65,7 @@ pub fn simulate_submarine(
         (
             &mut Transform,
             &mut Velocity,
+            &mut SubStateComp,
             &SubPhysics,
             Option<&ServerCorrection>,
             &mut AngularVelocity,
@@ -107,38 +111,30 @@ pub fn simulate_submarine(
         SubInputs::default()
     };
 
-    for (mut transform, mut vel, spec, _correction, mut ang_vel_comp, _net) in &mut q_sub {
-        // Persist ballast fill across frames using last telemetry (single local player)
-        // Default to 50% fill; override from telemetry if available (mass_eff > 0 implies prior step)
-        let mut prev_fill = vec![0.5; spec.0.ballast_tanks.len()];
-        if spec.0.ballast_tanks.len() >= 2 {
-            let last = &telemetry.0;
-            if last.mass_eff > 0.0 {
-                prev_fill[0] = last.fill_fwd.clamp(0.0, 1.0);
-                prev_fill[1] = last.fill_aft.clamp(0.0, 1.0);
-            }
-        }
+    for (mut transform, mut vel, mut state_comp, spec, _correction, mut ang_vel_comp, _net) in &mut q_sub {
         // Map visual mesh (+X forward) to physics body (+Z forward): yaw +90°
         let body_from_mesh = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
         let mesh_from_body = body_from_mesh.conjugate();
-        let mut state = SubState {
-            position: levels::Vec3f::new(
-                transform.translation.x,
-                transform.translation.y,
-                transform.translation.z,
-            ),
-            velocity: levels::Vec3f::new(vel.x, vel.y, vel.z),
-            // Convert visual (mesh) orientation to physics (body) orientation
-            orientation: transform.rotation * body_from_mesh,
-            ang_mom: {
-                // Store body angular momentum L = I * omega (body frame)
-                let ixx = spec.0.ixx.max(0.0);
-                let iyy = spec.0.iyy.max(0.0);
-                let izz = spec.0.izz.max(0.0);
-                levels::Vec3f::new(ang_vel_comp.x * ixx, ang_vel_comp.y * iyy, ang_vel_comp.z * izz)
-            },
-            ballast_fill: prev_fill,
-        };
+        // Initialize persistent SubState once if needed
+        if state_comp.0.ballast_fill.is_empty() {
+            state_comp.0 = SubState {
+                position: levels::Vec3f::new(
+                    transform.translation.x,
+                    transform.translation.y,
+                    transform.translation.z,
+                ),
+                velocity: levels::Vec3f::new(vel.x, vel.y, vel.z),
+                orientation: transform.rotation * body_from_mesh,
+                ang_mom: {
+                    let ixx = spec.0.ixx.max(0.0);
+                    let iyy = spec.0.iyy.max(0.0);
+                    let izz = spec.0.izz.max(0.0);
+                    levels::Vec3f::new(ang_vel_comp.x * ixx, ang_vel_comp.y * iyy, ang_vel_comp.z * izz)
+                },
+                ballast_fill: vec![0.5; spec.0.ballast_tanks.len()],
+            };
+        }
+        let mut state = state_comp.0.clone();
         // Fixed-step loop; advance time parameter for flow sampling consistently
         let t0 = time.elapsed_secs() - (timing.acc + steps as f32 * step_dt);
         for i in 0..steps {
@@ -147,6 +143,8 @@ pub fn simulate_submarine(
             step_submarine_dbg(&level, &spec.0, inputs, &mut state, step_dt, t_sub, Some(&mut dbg));
             telemetry.0 = dbg; // store last step's diagnostics
         }
+        // Persist state back to component
+        state_comp.0 = state.clone();
         transform.translation = Vec3::new(state.position.x, state.position.y, state.position.z);
         // Convert physics (body) orientation back to visual (mesh) orientation
         transform.rotation = state.orientation * mesh_from_body;
