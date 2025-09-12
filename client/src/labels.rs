@@ -28,10 +28,10 @@ fn load_font(mut commands: Commands, assets: Res<AssetServer>) {
 fn attach_initial_labels(
     mut commands: Commands,
     font: Option<Res<LabelFont>>,
-    q_station: Query<Entity, With<crate::scene::world::StationRoom>>,
-    q_tunnel: Query<Entity, With<crate::scene::world::Tunnel>>,
-    q_chamber: Query<Entity, With<crate::scene::world::Chamber>>,
-    q_dock: Query<Entity, With<crate::scene::world::DockPad>>,
+    q_station: Query<Entity, With<crate::scene::greybox::StationRoom>>,
+    q_tunnel: Query<Entity, With<crate::scene::flow_field::Tunnel>>,
+    q_chamber: Query<Entity, With<crate::scene::greybox::Chamber>>,
+    q_dock: Query<Entity, With<crate::scene::greybox::DockPad>>,
     existing: Query<&TracksEntity>,
 ) {
     let Some(font) = font else { return; };

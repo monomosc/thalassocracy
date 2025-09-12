@@ -336,14 +336,27 @@ fn server_physics_tick(
             }
             let inp = if let Some(ci) = input { SubInputs { thrust: ci.thrust, yaw: ci.yaw, pump_fwd: ci.pump_fwd, pump_aft: ci.pump_aft } } else { SubInputs::default() };
             step_submarine(&level.0, &spec.0, inp, &mut s.0, timing.dt, time.elapsed_secs());
-            // Collision with tunnel walls (server-authoritative): Y/Z outside interior AABB
-            let c = level.0.tunnel.pos;
-            let h = level.0.tunnel.size;
-            let half_y = h.y * 0.5;
-            let half_z = h.z * 0.5;
-            let y = s.0.position.y;
-            let z = s.0.position.z;
-            let collide = y < c.y - half_y || y > c.y + half_y || z < c.z - half_z || z > c.z + half_z;
+
+            // Allowed space: inside the station room, the tunnel, or the chamber.
+            // If outside all three interior AABBs, treat as a wall collision.
+            let p = s.0.position;
+            let inside = |center: Vec3f, size: Vec3f| -> bool {
+                let hx = size.x * 0.5;
+                let hy = size.y * 0.5;
+                let hz = size.z * 0.5;
+                p.x >= center.x - hx && p.x <= center.x + hx
+                    && p.y >= center.y - hy && p.y <= center.y + hy
+                    && p.z >= center.z - hz && p.z <= center.z + hz
+            };
+            let in_room = inside(level.0.room.dock_pos + Vec3f::new(16.0, -0.4, 16.0), level.0.room.size);
+            // The room spec uses wall thickness and sizes; center is at origin in our greybox
+            // so prefer (0, room_h/2 - wall_thickness, 0) as approximate center. Fall back to (0,0,0).
+            let room_center = Vec3f::new(0.0, level.0.room.size.y * 0.5 - level.0.room.wall_thickness, 0.0);
+            let in_room2 = inside(room_center, level.0.room.size);
+            let in_tunnel = inside(level.0.tunnel.pos, level.0.tunnel.size);
+            let in_chamber = inside(level.0.chamber.pos, level.0.chamber.size);
+            let allowed = in_room || in_room2 || in_tunnel || in_chamber;
+            let collide = !allowed;
             if collide {
                 // Find client_id for this entity and disconnect once; also cleanup entity & mapping immediately
                 if let Some((&client_id, _)) = clients.0.iter().find(|(_, &e)| e == entity) {

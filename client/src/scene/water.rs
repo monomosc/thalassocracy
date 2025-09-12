@@ -8,7 +8,7 @@ use bevy::prelude::AlphaMode;
 
 use super::submarine::Submarine;
 use super::volumetric_cone_material::{VolumetricConeMaterial, VOLUMETRIC_CONE_SHADER_HANDLE};
-use crate::scene::world::{FlowField, Tunnel, TunnelBounds};
+use crate::scene::flow_field::{FlowField, Tunnel, TunnelBounds};
 
 // ---------- Plugin ----------
 
@@ -50,8 +50,6 @@ pub struct UnderwaterAssets {
     bubble_mat: Handle<StandardMaterial>,
     cone_mat: Handle<VolumetricConeMaterial>,
     cone_mesh: Handle<Mesh>,
-    halo_mesh: Handle<Mesh>,
-    halo_mat: Handle<StandardMaterial>,
 }
 
 #[derive(Resource)]
@@ -111,15 +109,7 @@ fn setup_underwater_assets(
     });
 
     // Volumetric halo for point lights
-    let halo_mesh = meshes.add(Mesh::from(bevy::math::primitives::Sphere::new(1.0)));
-    let halo_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.45, 0.85, 1.0).with_alpha(0.06),
-        emissive: LinearRgba::new(0.15, 0.5, 0.8, 0.0),
-        unlit: true,
-        alpha_mode: AlphaMode::Add,
-        double_sided: true,
-        ..Default::default()
-    });
+    // Note: volumetric halos for point lights are disabled; no halo assets created.
 
     // Unit cone along -Z, apex at origin, base at z=-1
     let cone_mesh = meshes.add(make_unit_cone_negz(32));
@@ -131,8 +121,6 @@ fn setup_underwater_assets(
         bubble_mat,
         cone_mat,
         cone_mesh,
-        halo_mesh,
-        halo_mat,
     };
 }
 
@@ -354,7 +342,7 @@ fn attach_or_update_volumetrics(
     mut commands: Commands,
     mut q_spot: Query<(Entity, &SpotLight, Option<&Children>)>,
     mut q_cone: Query<(Entity, &mut Transform, &MeshMaterial3d<VolumetricConeMaterial>), (With<VolumetricCone>, Without<VolumetricHalo>)>,
-    mut q_point: Query<(Entity, &PointLight, Option<&Children>)>,
+    mut _q_point: Query<(Entity, &PointLight, Option<&Children>)>,
     mut q_halo: Query<(Entity, &mut Transform), (With<VolumetricHalo>, Without<VolumetricCone>)>,
     assets: Res<UnderwaterAssets>,
     mut cone_mats: ResMut<Assets<VolumetricConeMaterial>>,
@@ -475,37 +463,8 @@ fn attach_or_update_volumetrics(
         }
     }
 
-    // PointLights → volumetric halos
-    for (e, light, children) in &mut q_point {
-        if light.range <= 0.1 { continue; }
-        let mut halo_e = None;
-        if let Some(ch) = children {
-            for c in ch.iter() {
-                if q_halo.get_mut(c).is_ok() { halo_e = Some(c); break; }
-            }
-        }
-        let scale = (light.range * 0.5).max(0.01);
-        let halo_t = Transform::from_scale(Vec3::splat(scale));
-        match halo_e {
-            Some(h) => {
-                if let Ok((_he, mut t)) = q_halo.get_mut(h) { *t = halo_t; }
-            }
-            None => {
-                let id = commands
-                    .spawn((
-                        Mesh3d(assets.halo_mesh.clone()),
-                        MeshMaterial3d(assets.halo_mat.clone()),
-                        halo_t,
-                        GlobalTransform::default(),
-                        VolumetricHalo,
-                        NotShadowCaster,
-                        Name::new("VolumetricHalo"),
-                    ))
-                    .id();
-                commands.entity(id).insert(ChildOf(e));
-            }
-        }
-    }
+    // Disable point-light volumetric halos: despawn any existing halos
+    for (e, _) in &mut q_halo { commands.entity(e).despawn(); }
 }
 
 // Unit cone along -Z: apex at (0,0,0), base circle at z=-1, radius=1

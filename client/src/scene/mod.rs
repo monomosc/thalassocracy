@@ -1,7 +1,11 @@
 use bevy::prelude::*;
 
 pub mod setup;
-pub mod world;
+pub mod flow_field;
+pub mod greybox;
+pub mod proctex;
+pub mod ore;
+pub mod light_bulb;
 pub mod submarine;
 pub mod camera;
 pub mod water;
@@ -17,16 +21,18 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         use submarine::{ClientPhysicsTiming, SubTelemetry};
 
-        app.register_type::<world::FlowField>()
+        app.register_type::<flow_field::FlowField>()
             .init_resource::<SubTelemetry>()
             .init_resource::<ClientPhysicsTiming>()
-            .add_systems(Startup, (setup::setup_scene, world::spawn_greybox))
+            .add_plugins(proctex::ProcTexPlugin)
+            .add_plugins(light_bulb::LightBulbPlugin)
+            .add_systems(Startup, (setup::setup_scene, greybox::spawn_greybox))
             .add_systems(
                 Update,
                 (
                     camera::switch_cameras_keys,
                     camera::free_fly_camera,
-                    world::draw_flow_gizmos,
+                    flow_field::draw_flow_gizmos,
                     submarine::simulate_submarine.in_set(SimSet),
                     submarine::apply_server_corrections,
                     camera::update_game_camera.after(SimSet),
@@ -37,5 +43,6 @@ impl Plugin for ScenePlugin {
         // Lightweight underwater look and feel
         app.add_plugins(water::WaterFxPlugin);
         app.add_plugins(postprocess::WaterPostProcessPlugin);
+        app.add_plugins(ore::OrePlugin);
     }
 }

@@ -101,6 +101,9 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // Base intensity shaped along the cone length
     // Favor apex, fade towards base using a power profile
     let along = pow(1.0 - dist01, falloff_pow);
+    // Extra attenuation with distance from the source (apex)
+    // This inverse-square-like term makes the cone lose brightness faster
+    let dist_attn = 1.0 / (1.0 + 6.0 * dist01 * dist01);
 
     // Edge smoothing towards apex and base
     let fade_apex = smoothstep(0.0, edge_soften, dist01);
@@ -144,10 +147,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let edge_soft = 1.0 - smoothstep(0.85, 1.0, dist_from_axis);
 
     // Emissive output: allow values > 1.0 for HDR+bloom
-    var emit = material_hdr_params.x * material_color.a * along * edge * view_boost * noise_mul * max(flicker, 0.01);
+    var emit = material_hdr_params.x * material_color.a * along * dist_attn * edge * view_boost * noise_mul * max(flicker, 0.01);
     emit *= (1.0 - edge_noise) * edge_soft;
     // Visual alpha: keep in [0,1] to be well-behaved with transparency sorting
-    let final_alpha = clamp(material_color.a * along * edge * edge_soft, 0.0, 1.0);
+    let final_alpha = clamp(material_color.a * along * dist_attn * edge * edge_soft, 0.0, 1.0);
 
 
     let final_color = compute_volumetric_fog(in.world_position.xyz, base_rgb, emit, final_alpha);
