@@ -19,6 +19,7 @@ use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 // A simple screen-space water post-process that adds depth-tinted absorption,
 // lightweight diffusion (scattering), and subtle refraction.
 
+#[allow(deprecated)]
 const WATER_POST_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(0x2f8e_3a80_bf21_40aa_9a9d_1d2c_8840_12aa);
 
 pub struct WaterPostProcessPlugin;
@@ -253,7 +254,6 @@ impl bevy::render::render_graph::ViewNode for WaterPostNode {
             occlusion_query_set: None,
         };
         let mut pass = render_context.command_encoder().begin_render_pass(&pass_desc);
-        tracing::debug!("water_post: executing fullscreen pass");
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, color_bg, &[]);
         pass.set_bind_group(1, depth_bg, &[]);

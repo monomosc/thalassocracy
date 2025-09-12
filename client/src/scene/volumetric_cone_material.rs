@@ -1,7 +1,6 @@
 use bevy::prelude::*;
-use bevy::reflect::TypePath;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
-use bevy::pbr::{Material, MeshPipelineViewLayoutKey};
+use bevy::pbr::Material;
 use bevy::prelude::Shader;
 use bevy::asset::Handle;
 
@@ -75,10 +74,10 @@ impl Material for VolumetricConeMaterial {
     fn alpha_mode(&self) -> AlphaMode { self.alpha_mode }
 
     fn specialize(
-            pipeline: &bevy::pbr::MaterialPipeline<Self>,
+            _pipeline: &bevy::pbr::MaterialPipeline<Self>,
             descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
             _layout: &bevy::render::mesh::MeshVertexBufferLayoutRef,
-            key: bevy::pbr::MaterialPipelineKey<Self>,
+            _key: bevy::pbr::MaterialPipelineKey<Self>,
         ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
             descriptor.primitive.cull_mode = None;
             
@@ -94,4 +93,5 @@ impl Material for VolumetricConeMaterial {
 }
 
 // Public shader handle so the app can register it via load_internal_asset!
+#[allow(deprecated)]
 pub const VOLUMETRIC_CONE_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(0x8a2e_5b11_c3d4_49c7_9b5e_3dd6_f4a1_55b1);

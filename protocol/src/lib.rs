@@ -89,8 +89,6 @@ pub struct NetPlayer {
     pub id: Uuid,
     pub position: [f32; 3],
     pub velocity: [f32; 3],
-    /// Heading/yaw in radians around world +Y axis. Convention: 0 = +X; positive turns left (towards −Z).
-    pub yaw: f32,
     /// Full body orientation as quaternion, `[x, y, z, w]` order.
     pub orientation: [f32; 4],
 }

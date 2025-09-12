@@ -6,7 +6,6 @@ use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy::prelude::AlphaMode;
 
-use super::camera::{CameraMode, FollowCam};
 use super::submarine::Submarine;
 use super::volumetric_cone_material::{VolumetricConeMaterial, VOLUMETRIC_CONE_SHADER_HANDLE};
 use crate::scene::world::{FlowField, Tunnel, TunnelBounds};
@@ -142,14 +141,14 @@ fn setup_underwater_assets(
 #[derive(Component)]
 struct UnderwaterCameraTuned;
 
+#[allow(clippy::type_complexity)]
 fn tune_camera_underwater(
     mut commands: Commands,
-    mut q: Query<(Entity, &mut Camera3d, Option<&DistanceFog>, Option<&UnderwaterCameraTuned>, &Transform, &CameraMode, &FollowCam), Without<UnderwaterCameraTuned>>,
+    mut q: Query<(Entity, &mut Camera3d, Option<&DistanceFog>, Option<&UnderwaterCameraTuned>, &Transform, &Camera), Without<UnderwaterCameraTuned>>,
 ) {
-    for (e, _cam3d, _fog_opt, tuned, _t, mode, _follow) in &mut q {
+    for (e, _cam3d, _fog_opt, tuned, _t, cam) in &mut q {
         let _ = tuned; // filter via query
-        if mode.free { continue; }
-        let _ = e; // keep extension point for later
+        if !cam.is_active { continue; }
         commands.entity(e).insert(UnderwaterCameraTuned);
     }
 }
@@ -166,14 +165,20 @@ struct UnderwaterMote {
     vel: Vec3,
 }
 
+#[allow(clippy::type_complexity)]
 fn ensure_mote_field(
     mut commands: Commands,
     q_field: Query<Entity, With<MoteField>>,
-    q_cam: Query<(Entity, &Transform), (With<Camera3d>, Without<MoteField>)>,
+    q_cam: Query<(Entity, &Transform, &Camera), (With<Camera3d>, Without<MoteField>)>,
     assets: Res<UnderwaterAssets>,
 ) {
     if q_field.iter().next().is_some() { return; }
-    let Ok((_cam_e, cam_t)) = q_cam.single() else { return; };
+    // Choose the active camera
+    let mut active: Option<Transform> = None;
+    for (_e, t, cam) in &q_cam {
+        if cam.is_active { active = Some(*t); break; }
+    }
+    let Some(cam_t) = active else { return; };
 
     let radius = 8.0_f32;
     let count = 160_usize;
@@ -214,14 +219,17 @@ fn ensure_mote_field(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn tick_motes(
     time: Res<Time>,
     mut q_field: Query<(&mut Transform, &MoteField)>,
-    q_cam: Query<&Transform, (With<Camera3d>, Without<MoteField>)>,
+    q_cam: Query<(&Transform, &Camera), (With<Camera3d>, Without<MoteField>)>,
     mut q_motes: Query<(&mut Transform, &mut UnderwaterMote), (Without<Camera3d>, Without<MoteField>)>,
     q_flow: Query<(&GlobalTransform, &FlowField, &TunnelBounds), With<Tunnel>>,
 ) {
-    let Ok(cam_t) = q_cam.single() else { return; };
+    let mut cam_opt: Option<Transform> = None;
+    for (t, cam) in &q_cam { if cam.is_active { cam_opt = Some(*t); break; } }
+    let Some(cam_t) = cam_opt else { return; };
     let dt = time.delta_secs().clamp(0.0, 0.05);
 
     if let Ok((mut field_t, field)) = q_field.single_mut() {
@@ -294,8 +302,8 @@ fn spawn_bubbles(
     em.cooldown = 0.06; // spawn rate
 
     // Spawn a small cluster near the stern (-X of sub local space)
-    let stern = gt.translation() + (gt.rotation() * Vec3::NEG_X) * 1.2 + (gt.rotation() * Vec3::Y) * 0.1;
-    let right = gt.rotation() * Vec3::Z;
+    let stern = gt.translation() + (gt.rotation() * Vec3::NEG_Z) * 1.2 + (gt.rotation() * Vec3::Y) * 0.1;
+    let right = gt.rotation() * Vec3::X;
     let up = gt.rotation() * Vec3::Y;
 
     for i in 0..3 {
@@ -329,7 +337,7 @@ fn tick_bubbles(
         t.translation += Vec3::new(0.0, b.rise * dt, 0.0);
         t.translation.x += (time.elapsed_secs() * 2.3 + t.translation.y).sin() * 0.01;
         t.translation.z += (time.elapsed_secs() * 1.9 + t.translation.x).cos() * 0.01;
-        t.scale = Vec3::splat(s as f32);
+        t.scale = Vec3::splat(s);
     }
 }
 
@@ -341,6 +349,7 @@ struct VolumetricCone;
 #[derive(Component)]
 struct VolumetricHalo;
 
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn attach_or_update_volumetrics(
     mut commands: Commands,
     mut q_spot: Query<(Entity, &SpotLight, Option<&Children>)>,
@@ -401,12 +410,12 @@ fn attach_or_update_volumetrics(
                         }
                     };
                     // Determine deterministic phases based on light entity id
-                    let mut seed = e.index() as u32 ^ 0x9E37_79B9;
+                    let mut seed = e.index() ^ 0x9E37_79B9;
                     let mut frand = || {
                         seed ^= seed << 13;
                         seed ^= seed >> 17;
                         seed ^= seed << 5;
-                        (seed as f32 / u32::MAX as f32)
+                        seed as f32 / u32::MAX as f32
                     };
                     let phase_low = frand() * std::f32::consts::TAU;
                     let phase_mid = frand() * std::f32::consts::TAU;
@@ -424,7 +433,7 @@ fn attach_or_update_volumetrics(
             None => {
                 // Create a unique material instance for this cone with alpha scaled by light intensity
                 // Generate deterministic phases for this light
-                let mut seed = e.index() as u32 ^ 0x9E37_79B9;
+                let mut seed = e.index() ^ 0x9E37_79B9;
                 let mut frand = || {
                     seed ^= seed << 13;
                     seed ^= seed >> 17;

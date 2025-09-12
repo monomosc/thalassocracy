@@ -1,11 +1,11 @@
 //! Shared level data for client and server.
 //!
-//! This crate intentionally avoids any Bevy types. It exposes a simple,
-//! serializable schema the server can use for validation and the client can
-//! translate into meshes/volumes.
+//! This crate keeps dependencies minimal and uses `bevy_math` for vector and
+//! quaternion math types (`Vec3`, `Quat`) which provide serde support and are
+//! widely used across the codebase.
 
-mod math;
-pub use math::{Vec3f, Quatf};
+// Re-export math types so downstream code can continue using `Vec3f`/`Quatf`.
+pub use bevy_math::{Quat as Quatf, Vec3 as Vec3f};
 mod spec;
 pub use spec::{FlowFieldSpec, RoomSpec, TunnelSpec, ChamberSpec, TorusTunnelSpec, TorusExitSpec, LevelSpec};
 

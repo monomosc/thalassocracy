@@ -70,6 +70,7 @@ pub fn client_connect(mut commands: Commands, args: Res<Args>) {
     info!(?server_addr, "Client created and connecting");
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn pump_network(
     client: Option<ResMut<RenetClient>>,
     args: Res<Args>,
@@ -170,6 +171,7 @@ pub fn pump_network(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn apply_state_to_sub(
     my_id: Res<MyPlayerId>,
     latest: Res<LatestStateDelta>,
@@ -205,20 +207,25 @@ pub fn apply_state_to_sub(
             let o = me.orientation;
             Quat::from_xyzw(o[0], o[1], o[2], o[3])
         };
+        // Convert physics (body +Z forward) to mesh (visual +X forward): apply -90° yaw
+        let target_rot = target_rot_raw * Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2);
         let target_vel_raw = Vec3::new(me.velocity[0], me.velocity[1], me.velocity[2]);
 
         // Initialize or low-pass filter the authoritative target to remove HF jitter
         if !filtered.initialized {
             filtered.pos = target_pos_raw;
-            filtered.rot = target_rot_raw;
+            // Initialize in the same frame (mesh space) used for comparisons/corrections
+            filtered.rot = target_rot;
             filtered.vel = target_vel_raw;
             filtered.initialized = true;
         } else {
             let dt = time.delta_secs().max(1e-3);
-            let tau = 0.10_f32; // ~100ms smoothing time constant
+            // Adapt smoothing: track server more tightly while the player is steering
+            let yaw_in_mag = controls.as_ref().map(|c| c.yaw.abs()).unwrap_or(0.0);
+            let tau = if yaw_in_mag > 0.05 { 0.035 } else { 0.10 }; // ~35ms when steering, 100ms otherwise
             let alpha = 1.0 - (-dt / tau).exp();
             filtered.pos = filtered.pos.lerp(target_pos_raw, alpha);
-            filtered.rot = filtered.rot.slerp(target_rot_raw, alpha);
+            filtered.rot = filtered.rot.slerp(target_rot, alpha);
             // Blend velocity toward server but also consider current sim velocity to avoid buzz
             filtered.vel = filtered.vel.lerp(target_vel_raw, alpha);
         }
@@ -229,7 +236,7 @@ pub fn apply_state_to_sub(
 
         // If the error is huge (teleport), snap immediately; otherwise smooth via ServerCorrection
         let raw_pos_err = t.translation.distance(target_pos_raw);
-        let raw_ang_err = t.rotation.angle_between(target_rot_raw);
+        let raw_ang_err = t.rotation.angle_between(target_rot);
         let pos_err = t.translation.distance(target_pos);
         let ang_err = t.rotation.angle_between(target_rot);
         let snap_now = raw_pos_err > 10.0 || raw_ang_err > 1.0;
@@ -237,16 +244,15 @@ pub fn apply_state_to_sub(
         let yaw_in = controls.as_ref().map(|c| c.yaw.abs()).unwrap_or(0.0);
         let steering = yaw_in > 0.05;
         // Hysteresis thresholds: tighter for removal, looser for insertion; looser still when steering
-        let tiny_pos = if steering { 0.05 } else { 0.03 };
-        let tiny_ang = if steering { 0.03 } else { 0.02 };
-        let tiny_vel = if steering { 0.05 } else { 0.03 };
+        let tiny_pos = if steering { 0.08 } else { 0.04 };
+        let tiny_ang = if steering { 0.05 } else { 0.03 };
+        let tiny_vel = if steering { 0.08 } else { 0.04 };
         let tiny = pos_err < tiny_pos && ang_err < tiny_ang && vel_err < tiny_vel;
 
-        let enter_pos = if steering { 0.12 } else { 0.06 };
-        let enter_ang = if steering { 0.06 } else { 0.03 };
-        let enter_vel = if steering { 0.12 } else { 0.06 };
+        let enter_pos = if steering { 0.20 } else { 0.08 };
+        let enter_ang = if steering { 0.10 } else { 0.05 };
+        let enter_vel = if steering { 0.20 } else { 0.08 };
         let need_corr = pos_err > enter_pos || ang_err > enter_ang || vel_err > enter_vel;
-
         if snap_now {
             t.translation = target_pos;
             t.rotation = target_rot;
@@ -254,6 +260,7 @@ pub fn apply_state_to_sub(
             commands.entity(entity).remove::<ServerCorrection>();
             // Record the magnitude of snap for the desync indicator
             net_stats.last_snap_magnitude_m = raw_pos_err;
+
         } else if tiny {
             // Avoid micro-corrections. Drop any existing correction and gently align velocity.
             if corr_opt.is_some() {

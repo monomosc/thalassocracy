@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::math::Vec3f;
+use crate::Vec3f;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FlowFieldSpec {
@@ -70,4 +70,3 @@ pub struct LevelSpec {
     /// its flow field separately from the axis‑aligned `tunnel`.
     pub torus_tunnel: Option<TorusTunnelSpec>,
 }
-

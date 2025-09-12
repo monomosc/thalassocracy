@@ -20,7 +20,7 @@ pub struct DebugVis {
 
 impl Default for DebugVis {
     fn default() -> Self {
-        Self { labels: true, wireframe_global: false, flow_arrows: false, overlay: true, speed_arrow: true, telemetry: false, desync_indicator: true }
+        Self { labels: true, wireframe_global: false, flow_arrows: false, overlay: true, speed_arrow: false, telemetry: true, desync_indicator: true }
     }
 }
 
@@ -153,9 +153,8 @@ fn update_debug_overlay(
         if let Some(t) = telemetry {
             let d = &t.0;
             text.0 = format!(
-                "{}POS  {:7.2} {:7.2} {:7.2}\nSPD  {:5.2} m/s  REL {:5.2}\nYAW  {:6.1} deg  dYAW {:6.1} deg/s\nIN   T:{:>5.2}  R:{:>5.2}\nWATER {:5.2} ({:5.2},{:5.2},{:5.2})\n-- TELEMETRY{} --\nREL u:{:>5.2} v:{:>5.2} w:{:>5.2}\nQ   {:>6.1}  sign_u:{:>+3.0}  fm:{:>4.1}\nTAU ctl:{:>7.1} d_lin:{:>7.1} d_q:{:>7.1} d_v:{:>7.1}\nTAU ws:{:>7.1} beta:{:>7.1}  TOT:{:>7.1}\nERR {:>6.2} deg  ACC {:>6.3} r/s²{}",
+                "{}POS  {:7.2} {:7.2} {:7.2}\nSPD  {:5.2} m/s  REL {:5.2}\nYAW  {:6.1} deg  dYAW {:6.1} deg/s\nIN   T:{:>5.2}  R:{:>5.2}\nWATER {:5.2} ({:5.2},{:5.2},{:5.2})\n-- TELEMETRY --\nREL u:{:>5.2} v:{:>5.2} w:{:>5.2}\nQ   {:>6.1}  sign_u:{:>+3.0}  fm:{:>4.1}\nTAU ctl:{:>7.1} d_lin:{:>7.1} d_q:{:>7.1} d_v:{:>7.1}\nTAU ws:{:>7.1} beta:{:>7.1}  TOT:{:>7.1}\nERR {:>6.2} deg  ACC {:>6.3} r/s²{}\nRIGHT {:>5.2} {:>5.2} {:>5.2}\nUP {:>5.2} {:>5.2} {:>5.2}",
                 if paused { "PAUSED \n" } else { "" },
-                if paused { " (last frame)" } else { "" },
                 p.x, p.y, p.z,
                 speed, rel_speed,
                 yaw.to_degrees(), last.rate.to_degrees(),
@@ -167,6 +166,8 @@ fn update_debug_overlay(
                 d.tau_ws, d.tau_beta, d.tau_total,
                 d.yaw_err.to_degrees(), d.yaw_acc,
                 sync_line,
+                d.right.x, d.right.y, d.right.z,
+                d.up_b.x, d.up_b.y, d.up_b.z
             );
         } else {
             text.0 = format!(

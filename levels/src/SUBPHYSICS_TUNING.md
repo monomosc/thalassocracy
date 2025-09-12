@@ -6,11 +6,15 @@ This document explains how to tune `SubPhysicsSpec` and interpret the parameters
 
 - Units: SI (meters, seconds, kilograms, Newtons, radians)
 - Body axes:
-  - +X: forward (heading)
+  - +Z: forward (heading)
   - +Y: up (perpendicular to hull deck)
-  - +Z: right (starboard)
+  - +X: right (starboard)
 - Yaw convention: positive yaw turns the nose left (towards −Z). Right rudder input is positive, mapped to a negative yaw torque for forward motion.
-- Orientation: `Quatf` (w,x,y,z). Forward vector is `orientation.rotate_vec3([1,0,0])`.
+- Orientation: `Quatf` (bevy_math::Quat). Forward vector is `orientation * Vec3f::new(0.0, 0.0, 1.0)`.
+  - Heading yaw (radians) in XZ: `let f = orientation * Vec3f::new(0.0, 0.0, 1.0); f.x.atan2(f.z)`.
+  - Body angular momentum L is stored in `SubState.ang_mom` (body frame), not angular velocity.
+    - Angular velocity is derived per-axis: `ω = I⁻¹ L` using `ixx, iyy, izz`.
+    - Orientation integrates using body-frame angular velocities (post-multiplying body-axis deltas each step).
 
 ## Parameter Reference
 
@@ -128,6 +132,5 @@ This document explains how to tune `SubPhysicsSpec` and interpret the parameters
 ## References in Code
 
 - Spec definition: `levels/src/sub_specs.rs`
-- Physics integration: `levels/src/submarine_physics.rs`
+- Physics integration: `levels/src/submarine_physics/` (flow.rs, dynamics.rs, types.rs)
 - Pitch tests: `levels/tests/pitch_ballast_effect.rs`
-

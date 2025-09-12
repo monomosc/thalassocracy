@@ -86,7 +86,7 @@ pub fn torus_two_exit_level() -> LevelSpec {
             size: Vec3f::new(tunnel_len, tunnel_h, tunnel_w),
             pos: tunnel_pos,
             shell_thickness: wall_thick,
-            // Mild forward flow through the straight section
+            // Mild forward flow through the straight section (+X in world)
             flow: FlowFieldSpec::Uniform { flow: Vec3f::new(2.0, 0.0, 0.2), variance: 0.15 },
         },
         chamber: ChamberSpec { size: chamber_size, pos: chamber_pos },
@@ -96,10 +96,9 @@ pub fn torus_two_exit_level() -> LevelSpec {
             major_radius,
             minor_radius,
             wall_thickness: torus_wall,
-            // Uniform magnitude; the client/physics may choose to align to local tangent.
+            // Uniform magnitude along +X; the client/physics may choose to align to local tangent.
             flow: FlowFieldSpec::Uniform { flow: Vec3f::new(2.5, 0.0, 0.0), variance: 0.2 },
             exits: [exit_to_dock, exit_to_chamber],
         }),
     }
 }
-

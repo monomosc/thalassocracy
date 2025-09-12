@@ -12,10 +12,10 @@ fn forward_full_aft_empty_pitches_nose_down() {
 
     // Start centered, neutral orientation
     let mut state = SubState {
-        position: Vec3f { x: level.tunnel.pos.x, y: level.tunnel.pos.y, z: level.tunnel.pos.z },
+        position: Vec3f::new(level.tunnel.pos.x, level.tunnel.pos.y, level.tunnel.pos.z),
         velocity: Vec3f::new(0.0, 0.0, 0.0),
-        orientation: Quatf::from_yaw(0.0),
-        ang_vel: Vec3f::new(0.0, 0.0, 0.0),
+        orientation: Quatf::from_rotation_y(0.0),
+        ang_mom: Vec3f::new(0.0, 0.0, 0.0),
         ballast_fill: vec![0.5; spec.ballast_tanks.len()],
     };
 
@@ -36,7 +36,6 @@ fn forward_full_aft_empty_pitches_nose_down() {
     }
 
     // Forward vector should have a negative Y component (nose pitched downward)
-    let fwd = state.orientation.rotate_vec3(Vec3f::new(1.0, 0.0, 0.0));
+    let fwd = state.orientation * Vec3f::new(1.0, 0.0, 0.0);
     assert!(fwd.y < -0.02, "expected nose-down pitch; forward.y = {}", fwd.y);
 }
-

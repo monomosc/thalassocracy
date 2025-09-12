@@ -18,7 +18,7 @@ struct FlowInstrDot;
 #[derive(Resource, Default, Clone, Copy)]
 struct FlowInstrState {
     pos: Vec2,
-    /// Longitudinal water-relative speed along body +X (surge); >0 = coming from front, <0 = from back
+    /// Longitudinal water-relative speed along body +Z (surge); >0 = coming from front, <0 = from back
     surge: f32,
 }
 
@@ -28,7 +28,62 @@ impl Plugin for HudInstrumentsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<FlowInstrState>()
             .add_systems(Startup, (spawn_flow_instr, spawn_ballast_hud))
-            .add_systems(Update, (update_flow_state, draw_flow_instr, update_ballast_hud));
+            .add_systems(Update, (sanitize_ui_nodes, update_flow_state, draw_flow_instr, update_ballast_hud));
+    }
+}
+
+// Best-effort guard against NaN values slipping into UI nodes which can panic inside bevy_ui.
+fn sanitize_ui_nodes(mut q: Query<(Entity, &mut Node, Option<&Name>)>) {
+    fn fix(label: &'static str, v: &mut Val, dirty: &mut Vec<&'static str>) {
+        match v {
+            Val::Px(x) => {
+                if !x.is_finite() || *x > 1.0e7 || *x < -1.0e7 {
+                    *x = 0.0;
+                    dirty.push(label);
+                }
+            }
+            Val::Percent(p) => {
+                if !p.is_finite() || *p > 1.0e6 || *p < -1.0e6 {
+                    *v = Val::Px(0.0);
+                    dirty.push(label);
+                }
+            }
+            _ => {}
+        }
+    }
+    for (e, mut n, name) in &mut q {
+        let mut dirty: Vec<&'static str> = Vec::new();
+        fix("width", &mut n.width, &mut dirty);
+        fix("height", &mut n.height, &mut dirty);
+        fix("left", &mut n.left, &mut dirty);
+        fix("right", &mut n.right, &mut dirty);
+        fix("top", &mut n.top, &mut dirty);
+        fix("bottom", &mut n.bottom, &mut dirty);
+        fix("row_gap", &mut n.row_gap, &mut dirty);
+        fix("column_gap", &mut n.column_gap, &mut dirty);
+        let mut m = n.margin;
+        fix("margin.left", &mut m.left, &mut dirty);
+        fix("margin.right", &mut m.right, &mut dirty);
+        fix("margin.top", &mut m.top, &mut dirty);
+        fix("margin.bottom", &mut m.bottom, &mut dirty);
+        n.margin = m;
+        let mut p = n.padding;
+        fix("padding.left", &mut p.left, &mut dirty);
+        fix("padding.right", &mut p.right, &mut dirty);
+        fix("padding.top", &mut p.top, &mut dirty);
+        fix("padding.bottom", &mut p.bottom, &mut dirty);
+        n.padding = p;
+        let mut b = n.border;
+        fix("border.left", &mut b.left, &mut dirty);
+        fix("border.right", &mut b.right, &mut dirty);
+        fix("border.top", &mut b.top, &mut dirty);
+        fix("border.bottom", &mut b.bottom, &mut dirty);
+        n.border = b;
+
+        if !dirty.is_empty() {
+            let label = name.map(|n| n.as_str().to_string()).unwrap_or_else(|| format!("Entity#{:?}", e));
+            tracing::warn!(target: "ui_sanitize", node=%label, fields=?dirty, "Sanitized non-finite UI values");
+        }
     }
 }
 
@@ -60,7 +115,6 @@ fn spawn_flow_instr(mut commands: Commands) {
                         border: UiRect::all(Val::Px(RING_THICKNESS)),
                         ..Default::default()
                     },
-                    BorderRadius::MAX,
                     BackgroundColor(Color::NONE),
                     BorderColor(Color::srgba(1.0, 1.0, 1.0, 0.6)),
                     FlowInstrRing,
@@ -75,7 +129,6 @@ fn spawn_flow_instr(mut commands: Commands) {
                             height: Val::Px(DOT_SIZE),
                             ..Default::default()
                         },
-                        BorderRadius::MAX,
                         BackgroundColor(Color::WHITE),
                         FlowInstrDot,
                         Name::new("Flow Instrument Dot"),
@@ -102,19 +155,20 @@ fn update_flow_state(
     let level = greybox_level();
     let (flow, _var) = sample_flow_at(&level, Vec3f { x: p.x, y: p.y, z: p.z }, time.elapsed_secs());
     let rel = Vec3::new(v.x - flow.x, v.y - flow.y, v.z - flow.z);
-    // Longitudinal relative speed (body frame)
-    
     // Body frame: rotate world -> local
-    let rot_inv = transform.rotation.conjugate();
-    let rel_body = rot_inv * rel;
-    let u_rel = rel_body.x;
+    // Convert mesh orientation to physics body orientation before rotating
+    // Map mesh (+X forward) to body (+Z forward): yaw +90°
+    let body_from_mesh = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+    let rot_body = transform.rotation * body_from_mesh;
+    let rel_body = rot_body.conjugate() * rel;
+    // Longitudinal relative speed (+Z forward)
+    let u_rel = rel_body.z;
     // Incoming flow direction towards the nose
     let n = (-rel_body).normalize_or_zero();
     // Project to instrument plane using gnomonic-like mapping to keep center stable
-    let denom = (n.x).abs().max(1e-3); // use |forward| to avoid sign flip when flow from rear; center when n ~ +X
-    // We want center when n ~ +X (incoming at bow). If using denom = n.x, positive when forward.
-    // Map: x = n.z/denom (right), y = n.y/denom (up)
-    let mut dot = Vec2::new(n.z / denom, n.y / denom);
+    let denom = (n.z).abs().max(1e-3); // use |forward| (+Z) to avoid flip; center when n ~ +Z
+    // Map: x = n.x/denom (right), y = n.y/denom (up)
+    let mut dot = Vec2::new(n.x / denom, n.y / denom);
     if !dot.x.is_finite() || !dot.y.is_finite() { dot = Vec2::ZERO; }
     // Clamp to unit circle
     let mag = dot.length();
@@ -339,13 +393,12 @@ fn update_ballast_hud(
 ) {
     let Some(t) = telemetry else { return; };
     let d = &t.0;
-    if let Ok(mut n) = q_fwd.single_mut() {
-        n.height = Val::Px((d.fill_fwd.clamp(0.0, 1.0)) * GAUGE_H);
-    }
-    if let Ok(mut n) = q_aft.single_mut() {
-        n.height = Val::Px((d.fill_aft.clamp(0.0, 1.0)) * GAUGE_H);
-    }
+    let fwd = if d.fill_fwd.is_finite() { d.fill_fwd.clamp(0.0, 1.0) } else { 0.0 };
+    let aft = if d.fill_aft.is_finite() { d.fill_aft.clamp(0.0, 1.0) } else { 0.0 };
+    if let Ok(mut n) = q_fwd.single_mut() { n.height = Val::Px(fwd * GAUGE_H); }
+    if let Ok(mut n) = q_aft.single_mut() { n.height = Val::Px(aft * GAUGE_H); }
     if let Ok(mut txt) = q_txt.single_mut() {
-        txt.0 = format!("Buoyancy: net {:>7.1} N", d.buoy_net_n);
+        let b = if d.buoy_net_n.is_finite() { d.buoy_net_n } else { 0.0 };
+        txt.0 = format!("Buoyancy: net {:>7.1} N", b);
     }
 }

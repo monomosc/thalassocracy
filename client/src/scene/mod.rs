@@ -24,12 +24,12 @@ impl Plugin for ScenePlugin {
             .add_systems(
                 Update,
                 (
-                    camera::toggle_camera_mode,
+                    camera::switch_cameras_keys,
                     camera::free_fly_camera,
                     world::draw_flow_gizmos,
                     submarine::simulate_submarine.in_set(SimSet),
                     submarine::apply_server_corrections,
-                    camera::update_follow_camera,
+                    camera::update_game_camera.after(SimSet),
                     submarine::animate_rudder,
                 ),
             );

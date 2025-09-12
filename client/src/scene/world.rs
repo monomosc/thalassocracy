@@ -1,10 +1,10 @@
 use bevy::color::{LinearRgba, Srgba};
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSamplerDescriptor};
 use bevy::math::primitives::{Cuboid, Sphere, Plane3d};
-use bevy::pbr::{MeshMaterial3d, StandardMaterial};
+use bevy::pbr::{MeshMaterial3d, NotShadowCaster, StandardMaterial};
 use bevy::prelude::*;
 use bevy::math::{Affine2, Vec2};
-use tracing::info;
+use bevy::render::render_resource::TextureUsages;
 
 use crate::debug_vis::DebugVis;
 use levels::{builtins::greybox_level, FlowFieldSpec, LevelSpec, Vec3f};
@@ -12,6 +12,7 @@ use levels::subspecs::small_skiff_spec;
 
 use super::setup::spawn_box;
 use super::submarine::{make_rudder_prism_mesh, AngularVelocity, Rudder, SubPhysics, Submarine, Velocity};
+use super::camera::{GameCamera, CamMode, FollowCam, FollowCamState, FreeFlyState};
 
 #[derive(Component)]
 pub struct StationRoom;
@@ -22,6 +23,18 @@ pub struct Tunnel;
 #[derive(Component)]
 pub struct Chamber;
 
+#[derive(Component)]
+#[allow(dead_code)]
+pub struct BlinkingLight {
+    /// total period in seconds (e.g. 1.0 = 1 Hz)
+    period: f32,
+    /// fraction of the period that the light is ON (0..1), e.g. 0.2 = 20% duty cycle
+    on_fraction: f32,
+    /// intensity when ON
+    on_intensity: f32,
+    /// intensity when OFF (usually 0.0)
+    off_intensity: f32,
+}
 #[derive(Component)]
 pub struct DockPad;
 
@@ -452,12 +465,12 @@ pub fn spawn_greybox(
 
         // Forward floodlight as a child (spotlight)
         // Positioned slightly ahead of the hull nose; oriented along local +X.
-        let light_pos = Vec3::new(0.0, 0.0, 0.0);
+        let light_pos = Vec3::new(0.01, 0.3, 0.0);
         let light_transform = Transform::from_translation(light_pos)
             .looking_at(light_pos + Vec3::X, Vec3::Y);
         commands.spawn((
             SpotLight {
-                color: Color::srgb(1.00, 1.00, 1.0),
+                color: Color::srgb(1.0, 1.0, 1.0),
                 intensity: 1_200_000_000.0, // brighter for longer throw
                 range: 600.0,
                 inner_angle: 0.04,
@@ -468,6 +481,56 @@ pub fn spawn_greybox(
             light_transform,
             Name::new("Sub Floodlight"),
         )).insert(ChildOf(sub_root));
+
+        let tail_point_light_pos = Vec3::new(-1.1, 0.27, 0.0);
+        let tail_root = commands.spawn((
+            Transform::from_translation(tail_point_light_pos),
+            Name::from("Sub Tail-light Root"),
+            ChildOf(sub_root)
+        )).id();
+        let _tail_bulb = commands.spawn((
+            Mesh3d(meshes.add(Mesh::from(Sphere { radius: 0.02 }))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb(0.9,0.2, 0.25),
+                emissive: LinearRgba::rgb(8.0, 0.0, 0.0),
+                ..default()
+            })),
+            Name::from("Sub Tail-light bulb"),
+            NotShadowCaster,
+            ChildOf(tail_root)
+        ));
+        let _tail_light = commands.spawn((
+            PointLight {
+                color: Color::linear_rgb(1.0, 0.0, 0.0),
+                intensity: 2000.0,  //gets overwritten anyway
+                range: 24.0,
+                shadows_enabled: false,
+                ..default()
+            },
+            Transform::IDENTITY,
+            Name::from("Sub Tail-ligt Pointlight"),
+            ChildOf(tail_root)
+        ));
+
+        // Unified game camera (single camera). Initialize near the bow; mode = FirstPerson
+        let fp_world = start + Vec3::new(1.0, 0.0, 0.0);
+        let fp_t = Transform::from_translation(fp_world).looking_at(fp_world + Vec3::X, Vec3::Y);
+        commands.spawn((
+            Camera3d { depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING).into(), ..Default::default() },
+            Camera { hdr: true, is_active: true, ..Default::default() },
+            bevy::core_pipeline::bloom::Bloom::OLD_SCHOOL,
+            bevy::core_pipeline::tonemapping::Tonemapping::TonyMcMapface,
+            bevy::pbr::DistanceFog { color: Color::srgb(0.04, 0.11, 0.12), falloff: bevy::pbr::FogFalloff::Exponential { density: 0.10 }, ..Default::default() },
+            Msaa::Off,
+            fp_t,
+            GlobalTransform::default(),
+            GameCamera,
+            CamMode::FirstPerson,
+            FollowCam { distance: 8.0, height: 2.0, stiffness: 8.0 },
+            FollowCamState { last_dir: Vec3::NEG_X },
+            FreeFlyState { yaw: 0.0, pitch: 0.0, speed: 8.0 },
+            Name::new("Game Camera"),
+        ));
 
         let _ = tunnel_entity; // ensure it exists (unused var otherwise)
     }

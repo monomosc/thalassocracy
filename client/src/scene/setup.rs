@@ -6,7 +6,7 @@ use bevy::render::render_resource::TextureUsages;
 use bevy::prelude::Mesh3d;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 
-use super::camera::{FollowCam, FollowCamState, CameraMode};
+// Cameras are spawned in world.rs (single unified camera)
 
 pub fn spawn_box(
     commands: &mut Commands,
@@ -56,31 +56,5 @@ pub fn setup_scene(mut commands: Commands) {
         Name::new("Sun Light"),
     ));
 
-    // Follow camera with fog and tonemapping.
-    commands.spawn((
-        Camera3d { depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING).into(), ..Default::default() },
-        Camera {
-            hdr: true,
-            ..default()
-        },
-        Bloom::OLD_SCHOOL,
-        // Subtle blue‑green fog tuned for underwater caves.
-        DistanceFog {
-            color: Color::srgb(0.04, 0.11, 0.12),
-            falloff: FogFalloff::Exponential { density: 0.10 },
-            ..Default::default()
-        },
-        Tonemapping::TonyMcMapface,
-        Msaa::Off,
-        Transform::from_xyz(-0.1, 0.0, 0.0),
-        GlobalTransform::default(),
-        FollowCam {
-            distance: -0.01,
-            height: 0.01,
-            stiffness: 10.0,
-        },
-        FollowCamState { last_dir: Vec3::NEG_X },
-        CameraMode { free: false },
-        Name::new("Follow Camera"),
-    ));
+    // No camera spawned here; world::spawn_greybox creates the single GameCamera.
 }

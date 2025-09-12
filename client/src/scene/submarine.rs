@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
 
-use levels::{builtins::greybox_level, Quatf, SubInputs, SubState, SubStepDebug};
+use levels::{builtins::greybox_level, SubInputs, SubState, SubStepDebug};
 use levels::{step_submarine_dbg, SubPhysicsSpec};
 
 use crate::sim_pause::SimPause;
@@ -24,6 +24,7 @@ pub struct Rudder;
 pub struct SubPhysics(pub SubPhysicsSpec);
 
 #[derive(Component, Debug, Clone)]
+#[allow(dead_code)]
 pub struct ServerCorrection {
     pub target_pos: Vec3,
     pub target_rot: Quat,
@@ -48,16 +49,13 @@ pub struct ClientPhysicsTiming {
 impl Default for ClientPhysicsTiming {
     fn default() -> Self {
         // Match server default tick_hz (30 Hz) unless overridden later.
-        Self { acc: 0.0, dt: 1.0 / 30.0 }
+        Self { acc: 0.0, dt: 1.0 / 120.0 }
     }
 }
 
-#[inline]
-fn quatf_to_bevy(q: Quatf) -> Quat {
-    // levels::Quatf stores (w, x, y, z); Bevy expects (x, y, z, w)
-    Quat::from_xyzw(q.x, q.y, q.z, q.w)
-}
+// Quatf is the same type as Bevy's Quat (re-exported from bevy_math).
 
+#[allow(clippy::type_complexity)]
 pub fn simulate_submarine(
     time: Res<Time>,
     mut q_sub: Query<
@@ -109,8 +107,7 @@ pub fn simulate_submarine(
         SubInputs::default()
     };
 
-    for (mut transform, mut vel, spec, correction, mut ang_vel_comp, net) in &mut q_sub {
-        let net_driven = net.is_some();
+    for (mut transform, mut vel, spec, _correction, mut ang_vel_comp, _net) in &mut q_sub {
         // Persist ballast fill across frames using last telemetry (single local player)
         // Default to 50% fill; override from telemetry if available (mass_eff > 0 implies prior step)
         let mut prev_fill = vec![0.5; spec.0.ballast_tanks.len()];
@@ -121,19 +118,25 @@ pub fn simulate_submarine(
                 prev_fill[1] = last.fill_aft.clamp(0.0, 1.0);
             }
         }
+        // Map visual mesh (+X forward) to physics body (+Z forward): yaw +90°
+        let body_from_mesh = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let mesh_from_body = body_from_mesh.conjugate();
         let mut state = SubState {
-            position: levels::Vec3f {
-                x: transform.translation.x,
-                y: transform.translation.y,
-                z: transform.translation.z,
+            position: levels::Vec3f::new(
+                transform.translation.x,
+                transform.translation.y,
+                transform.translation.z,
+            ),
+            velocity: levels::Vec3f::new(vel.x, vel.y, vel.z),
+            // Convert visual (mesh) orientation to physics (body) orientation
+            orientation: transform.rotation * body_from_mesh,
+            ang_mom: {
+                // Store body angular momentum L = I * omega (body frame)
+                let ixx = spec.0.ixx.max(0.0);
+                let iyy = spec.0.iyy.max(0.0);
+                let izz = spec.0.izz.max(0.0);
+                levels::Vec3f::new(ang_vel_comp.x * ixx, ang_vel_comp.y * iyy, ang_vel_comp.z * izz)
             },
-            velocity: levels::Vec3f { x: vel.x, y: vel.y, z: vel.z },
-            orientation: {
-                use bevy::prelude::EulerRot;
-                let (_rx, yaw, _rz) = transform.rotation.to_euler(EulerRot::YXZ);
-                Quatf::from_yaw(yaw)
-            },
-            ang_vel: levels::Vec3f::new(ang_vel_comp.x, ang_vel_comp.y, ang_vel_comp.z),
             ballast_fill: prev_fill,
         };
         // Fixed-step loop; advance time parameter for flow sampling consistently
@@ -144,16 +147,16 @@ pub fn simulate_submarine(
             step_submarine_dbg(&level, &spec.0, inputs, &mut state, step_dt, t_sub, Some(&mut dbg));
             telemetry.0 = dbg; // store last step's diagnostics
         }
-        if !net_driven {
-            transform.translation = Vec3::new(state.position.x, state.position.y, state.position.z);
-            // If a server correction smoothing is active, avoid fighting it on rotation.
-            // Otherwise, apply full simulated orientation (yaw + pitch).
-            if correction.is_none() {
-                transform.rotation = quatf_to_bevy(state.orientation);
-            }
-            **vel = Vec3::new(state.velocity.x, state.velocity.y, state.velocity.z);
-            **ang_vel_comp = Vec3::new(state.ang_vel.x, state.ang_vel.y, state.ang_vel.z);
-        }
+        transform.translation = Vec3::new(state.position.x, state.position.y, state.position.z);
+        // Convert physics (body) orientation back to visual (mesh) orientation
+        transform.rotation = state.orientation * mesh_from_body;
+        
+        **vel = Vec3::new(state.velocity.x, state.velocity.y, state.velocity.z);
+        // Update client-side rates from body angular momentum
+        let wx = if spec.0.ixx > 0.0 { state.ang_mom.x / spec.0.ixx } else { 0.0 };
+        let wy = if spec.0.iyy > 0.0 { state.ang_mom.y / spec.0.iyy } else { 0.0 };
+        let wz = if spec.0.izz > 0.0 { state.ang_mom.z / spec.0.izz } else { 0.0 };
+        **ang_vel_comp = Vec3::new(wx, wy, wz);
     }
 }
 
@@ -277,4 +280,3 @@ pub fn make_rudder_prism_mesh(length: f32, height: f32, thickness: f32) -> Mesh 
     mesh.insert_indices(Indices::U32(indices));
     mesh
 }
-

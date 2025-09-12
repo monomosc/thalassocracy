@@ -30,7 +30,7 @@ impl Default for NetClientStats {
 #[derive(Resource, Debug, Default, Clone, Copy)]
 pub struct ReconcileErrors {
     pub pos_err_m: f32,
-    pub yaw_err_deg: f32,
+    pub orientation_error_deg: f32,
     pub vel_err_mps: f32,
 }
 
@@ -85,15 +85,24 @@ fn sample_reconcile_errors(
     let Ok((t, v, corr)) = q_sub.single() else { return; };
     if let Some(c) = corr {
         let pos_err = t.translation.distance(c.target_pos);
-        let yaw_err = t.rotation.angle_between(c.target_rot).to_degrees();
+        // Use yaw-only difference for orientation error to avoid pitch/roll inflating error during turns.
+        let yaw = |q: Quat| {
+            let f = q * Vec3::X; // mesh forward
+            f.z.atan2(f.x) // +left, -right
+        };
+        let mut dyaw = yaw(t.rotation) - yaw(c.target_rot);
+        // wrap to [-pi, pi]
+        if dyaw > std::f32::consts::PI { dyaw -= std::f32::consts::TAU; }
+        if dyaw < -std::f32::consts::PI { dyaw += std::f32::consts::TAU; }
+        let orientation_err = dyaw.abs().to_degrees();
         let vel_err = ((**v) - c.target_vel).length();
         errs.pos_err_m = pos_err;
-        errs.yaw_err_deg = yaw_err;
+        errs.orientation_error_deg = orientation_err;
         errs.vel_err_mps = vel_err;
     } else {
         // No outstanding correction -> assume aligned
         errs.pos_err_m = 0.0;
-        errs.yaw_err_deg = 0.0;
+        errs.orientation_error_deg = 0.0;
         errs.vel_err_mps = 0.0;
     }
 }
@@ -126,7 +135,7 @@ fn aggregate_desync_metric(
     out.unacked_inputs = backlog;
     out.last_snap_magnitude_m = stats.last_snap_magnitude_m;
     out.last_pos_err_m = errs.pos_err_m;
-    out.last_yaw_err_deg = errs.yaw_err_deg;
+    out.last_yaw_err_deg = errs.orientation_error_deg;
     out.last_vel_err_mps = errs.vel_err_mps;
 
     // Normalization tolerances (tunable):
@@ -148,10 +157,13 @@ fn aggregate_desync_metric(
     let w_snap = 0.02;
 
     let clamp01 = |x: f32| x.clamp(0.0, 1.0);
+    // If the player is actively steering, relax error contributions to avoid spiky Adj during tight maneuvers.
+    let steer = inputs.as_ref().map(|i| i.yaw.abs()).unwrap_or(0.0);
+    let relax = 1.0 - 0.5 * steer; // up to 50% relaxation at |yaw|=1
 
-    let term_pos = w_pos * clamp01(errs.pos_err_m / pos_tol);
-    let term_yaw = w_yaw * clamp01(errs.yaw_err_deg / yaw_tol);
-    let term_vel = w_vel * clamp01(errs.vel_err_mps / vel_tol);
+    let term_pos = w_pos * relax * clamp01(errs.pos_err_m / pos_tol);
+    let term_yaw = w_yaw * relax * clamp01(errs.orientation_error_deg / yaw_tol);
+    let term_vel = w_vel * relax * clamp01(errs.vel_err_mps / vel_tol);
     let term_stale = w_stale * clamp01(snap_age_ms / stale_tol);
     let term_backlog = w_backlog * clamp01(backlog as f32 / backlog_tol);
     let term_jitter = w_jitter * clamp01(stats.inter_arrival_ewma_ms / jitter_tol);

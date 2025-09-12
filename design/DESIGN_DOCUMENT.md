@@ -87,3 +87,19 @@ Caves are impermanent. Each has a **lifetime of ~1 month**:
 - Piracy is allowed, griefing is costly due to registry exposure, bounties, and docking penalties.
 
 **Philosophy:** harsh but fair — not a second job.
+
+---
+
+## Tech Notes
+
+- Math Types: the `levels` crate uses `bevy_math` 0.16 for vectors/quaternions.
+  - Re-exports: `levels::Vec3f` = `bevy_math::Vec3`, `levels::Quatf` = `bevy_math::Quat`.
+  - Serde enabled for cross-crate serialization.
+- Coordinates & Conventions: see `design/COORDINATES_AND_CONVENTIONS.md` for the definitive basis/signs used across physics, HUD, and camera.
+- Heading/Yaw: compute from the rotated forward vector in XZ (body +Z forward).
+  - `let f = orientation * Vec3f::new(0.0, 0.0, 1.0);`
+  - `let yaw = (-f.x).atan2(f.z); // +yaw turns nose left`
+- Submarine Physics: split into focused modules under `levels/src/submarine_physics/`.
+  - `types.rs`: public structs (`SubState`, `SubInputs`, `SubStepDebug`).
+  - `flow.rs`: flow field sampling.
+  - `dynamics.rs`: thrust/rudder/buoyancy/drag integration.

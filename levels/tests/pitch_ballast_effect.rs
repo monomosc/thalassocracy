@@ -5,7 +5,7 @@ fn level_with_uniform_flow(mut base: LevelSpec, flow: Vec3f) -> LevelSpec {
     base
 }
 
-fn forward_vector(q: Quatf) -> Vec3f { q.rotate_vec3(Vec3f::new(1.0, 0.0, 0.0)) }
+fn forward_vector(q: Quatf) -> Vec3f { q * Vec3f::new(1.0, 0.0, 0.0) }
 
 fn pitch_angle_from_forward(fwd: Vec3f) -> f32 {
     // Signed pitch: + up, - down
@@ -19,10 +19,10 @@ fn forward_heavy_ballast_pitches_nose_down() {
     let spec = levels::subspecs::small_skiff_spec();
 
     let mut state = SubState {
-        position: Vec3f { x: level.tunnel.pos.x, y: level.tunnel.pos.y, z: level.tunnel.pos.z },
+        position: Vec3f::new(level.tunnel.pos.x, level.tunnel.pos.y, level.tunnel.pos.z),
         velocity: Vec3f::new(0.0, 0.0, 0.0),
-        orientation: Quatf::from_yaw(0.0),
-        ang_vel: Vec3f::new(0.0, 0.0, 0.0),
+        orientation: Quatf::from_rotation_y(0.0),
+        ang_mom: Vec3f::new(0.0, 0.0, 0.0),
         // Heavier forward (1.0) vs aft (0.0) should create negative pitch torque (nose down)
         ballast_fill: vec![1.0, 0.0],
     };
@@ -42,10 +42,10 @@ fn aft_heavy_ballast_pitches_nose_up() {
     let spec = levels::subspecs::small_skiff_spec();
 
     let mut state = SubState {
-        position: Vec3f { x: level.tunnel.pos.x, y: level.tunnel.pos.y, z: level.tunnel.pos.z },
+        position: Vec3f::new(level.tunnel.pos.x, level.tunnel.pos.y, level.tunnel.pos.z),
         velocity: Vec3f::new(0.0, 0.0, 0.0),
-        orientation: Quatf::from_yaw(0.0),
-        ang_vel: Vec3f::new(0.0, 0.0, 0.0),
+        orientation: Quatf::from_rotation_y(0.0),
+        ang_mom: Vec3f::new(0.0, 0.0, 0.0),
         // Heavier aft (1.0) vs forward (0.0) should create positive pitch torque (nose up)
         ballast_fill: vec![0.0, 1.0],
     };

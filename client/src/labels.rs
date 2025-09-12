@@ -72,9 +72,14 @@ fn attach_initial_labels(
 fn update_label_positions(
     mut q_text: Query<(&mut Node, &TracksEntity), With<LabelNode>>,
     q_target: Query<&GlobalTransform>,
-    q_camera: Query<(&Camera, &GlobalTransform)>,
+    q_camera3d: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
 ) {
-    let Some((camera, cam_transform)) = q_camera.iter().next() else { return; };
+    // Choose the active 3D camera (avoid UI Camera2d)
+    let mut cam_pair: Option<(&Camera, &GlobalTransform)> = None;
+    for (cam, gt) in &q_camera3d {
+        if cam.is_active { cam_pair = Some((cam, gt)); break; }
+    }
+    let Some((camera, cam_transform)) = cam_pair else { return; };
     let viewport = match camera.logical_viewport_size() {
         Some(v) => v,
         None => return,

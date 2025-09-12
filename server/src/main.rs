@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use std::net::UdpSocket;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -233,12 +234,17 @@ fn server_handle_messages(
                     // Compute a start position near tunnel entrance
                     let t = &level.0.tunnel;
                     let half_x = t.size.x * 0.5;
-                    let start = Vec3f { x: t.pos.x - half_x + 6.0, y: t.pos.y, z: t.pos.z };
+                    let start = Vec3f::new(t.pos.x - half_x + 6.0, t.pos.y, t.pos.z);
+                    // Align spawn orientation to the local flow direction in XZ (nose points with the flow)
+                    let (flow, _) = levels::sample_flow_at(&level.0, start, 0.0);
+                    let mut yaw = 0.0f32;
+                    let fxz = (flow.x * flow.x + flow.z * flow.z).sqrt();
+                    if fxz > 1e-3 { yaw = flow.x.atan2(flow.z); }
                     let spec = small_skiff_spec();
                     let entity = commands.spawn((
                         Player { id: player_uuid },
                         Submarine,
-                        SubStateComp(SubState { position: start, velocity: Vec3f::new(0.0, 0.0, 0.0), orientation: Quatf::from_yaw(0.0), ang_vel: Vec3f::new(0.0, 0.0, 0.0), ballast_fill: vec![0.5; spec.ballast_tanks.len()] }),
+                        SubStateComp(SubState { position: start, velocity: Vec3f::new(0.0, 0.0, 0.0), orientation: Quatf::from_rotation_y(yaw), ang_mom: Vec3f::new(0.0, 0.0, 0.0), ballast_fill: vec![0.5; spec.ballast_tanks.len()] }),
                         SubPhysicsComp(spec),
                         Name::new(format!("Player {player_uuid}")),
                     )).id();
@@ -288,7 +294,7 @@ fn server_handle_messages(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn server_physics_tick(
     time: Res<Time>,
     mut timing: ResMut<PhysicsTiming>,
@@ -374,7 +380,6 @@ fn server_broadcast_state(
             id: player.id,
             position: [state.0.position.x, state.0.position.y, state.0.position.z],
             velocity: [state.0.velocity.x, state.0.velocity.y, state.0.velocity.z],
-            yaw: state.0.orientation.to_yaw(),
             orientation: [state.0.orientation.x, state.0.orientation.y, state.0.orientation.z, state.0.orientation.w],
         });
     }

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::math::Vec3f;
+use crate::Vec3f;
 
 /// Precomputed physics parameters for a specific submarine hull class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +17,8 @@ pub struct SubPhysicsSpec {
     pub kr: f32,
     pub kr2: f32,
     pub kq: f32,
+    /// Linear roll rate damping coefficient (N·m·s/rad). Tiny value to quell ringing.
+    pub kp: f32,
     pub nr_v: f32,
     pub volume_m3: f32,
     pub t_max: f32,
@@ -81,15 +83,16 @@ pub mod subspecs {
             kr: 400.0,
             kr2: 120.0,
             kq: 600.0,
+            kp: 180.0,
             nr_v: 0.02,
             volume_m3: std::f32::consts::PI * radius * radius * length,
             // Controls
             t_max: 1200.0, // N
             tau_thr: 2.5, // s
             // Rudder effectiveness
-            n_delta_r: 0.003,
+            n_delta_r: 0.02,
             // Weathervane effectiveness
-            n_beta: 0.10,
+            n_beta: 0.03,
             m_delta_b: 1200.0,
             delta_r_max: 1.0,
             delta_b_max: 1.0,
@@ -100,11 +103,11 @@ pub mod subspecs {
             s_side,
             s_top,
             ballast_tanks: vec![
-                BallastTankSpec { pos_body: Vec3f::new( 0.9, 0.0, 0.0), capacity_kg: 12.0 }, // forward
-                BallastTankSpec { pos_body: Vec3f::new(-0.9, 0.0, 0.0), capacity_kg: 12.0 }, // aft
+                BallastTankSpec { pos_body: Vec3f::new( 0.9, 0.0, 0.0), capacity_kg: 30.0 }, // forward
+                BallastTankSpec { pos_body: Vec3f::new(-0.9, 0.0, 0.0), capacity_kg: 30.0 }, // aft
             ],
-            n_ws: 0.6,
-            y_delta_r: 0.04,
+            n_ws: 0.08,
+            y_delta_r: 0.0,
             cb_offset_body: Vec3f::new(0.0, 0.12, 0.0),
         }
     }

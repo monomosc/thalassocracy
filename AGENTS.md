@@ -4,6 +4,7 @@ For more granular step-by-step plans refer to the design/PROTOTYPE_PLAN.md
 ### Checking
 
 After every code change, vet the code both with `cargo check` and `cargo clippy` on all 3 crates.
+Also verify that design documentation is still correct.
 
 
 ### Misc
