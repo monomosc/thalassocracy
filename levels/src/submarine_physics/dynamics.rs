@@ -1,8 +1,10 @@
-use crate::{LevelSpec, Quatf, SubPhysicsSpec, Vec3f};
-use super::types::{SubInputs, SubState, SubStepDebug};
-use super::util::{quat_rotate_vec3, quat_to_yaw, vadd, vscale, vsub, BODY_FWD, BODY_RIGHT, BODY_UP};
-use super::terms::*;
 use super::flow::sample_flow_at;
+use super::terms::*;
+use super::types::{SubInputs, SubState, SubStepDebug};
+use super::util::{
+    quat_rotate_vec3, quat_to_yaw, vadd, vscale, vsub, BODY_FWD, BODY_RIGHT, BODY_UP,
+};
+use crate::{LevelSpec, Quatf, SubPhysicsSpec, Vec3f};
 
 /// Simple submarine dynamics step honoring thrust and rudder in a flow field.
 /// See `step_submarine_dbg` for full details and telemetry.
@@ -82,7 +84,11 @@ pub fn step_submarine_dbg(
         "Expected non-negative scaling terms for yaw control torque"
     );
     if u_rel.abs() > 1e-3 && inputs.yaw.abs() > 1e-6 {
-        let expected_sign = if sign_u > 0.0 { -inputs.yaw.signum() } else { inputs.yaw.signum() };
+        let expected_sign = if sign_u > 0.0 {
+            -inputs.yaw.signum()
+        } else {
+            inputs.yaw.signum()
+        };
         if tau_control.abs() > 1e-6 {
             debug_assert!((tau_control.signum() - expected_sign).abs() < 1.01,
                 "Rudder control torque sign mismatch: tau_control={}, yaw_in={}, sign_u={}, inputs.yaw={}",
@@ -121,8 +127,12 @@ pub fn step_submarine_dbg(
     let dot = (fwdx * desx + fwdz * desz).clamp(-1.0, 1.0);
     let cross_y = fwdx * desz - fwdz * desx;
     let mut yaw_err = cross_y.atan2(dot.abs());
-    if yaw_err > std::f32::consts::PI { yaw_err -= std::f32::consts::TAU; }
-    if yaw_err < -std::f32::consts::PI { yaw_err += std::f32::consts::TAU; }
+    if yaw_err > std::f32::consts::PI {
+        yaw_err -= std::f32::consts::TAU;
+    }
+    if yaw_err < -std::f32::consts::PI {
+        yaw_err += std::f32::consts::TAU;
+    }
     let yaw_err = yaw_err.clamp(-0.7, 0.7);
     let tau_beta = torque_weathervane_beta(spec, q, yaw_err);
     tau_yaw += tau_beta;
@@ -152,7 +162,7 @@ pub fn step_submarine_dbg(
         g,
     );
     tau_pitch += torque_from_cob_buoyancy_about_axis(spec, state.orientation, right, buoyancy);
-    tau_roll  += torque_from_cob_buoyancy_about_axis(spec, state.orientation, forward, buoyancy);
+    tau_roll += torque_from_cob_buoyancy_about_axis(spec, state.orientation, forward, buoyancy);
 
     // Linear pitch damping uses current omega.x
     let q_pitch = omega_body.x;
@@ -169,11 +179,7 @@ pub fn step_submarine_dbg(
         omega_body.z * l.x - omega_body.x * l.z,
         omega_body.x * l.y - omega_body.y * l.x,
     );
-    let ldot = Vec3f::new(
-        tau_b.x - cross.x,
-        tau_b.y - cross.y,
-        tau_b.z - cross.z,
-    );
+    let ldot = Vec3f::new(tau_b.x - cross.x, tau_b.y - cross.y, tau_b.z - cross.z);
     state.ang_mom = Vec3f::new(l.x + ldot.x * dt, l.y + ldot.y * dt, l.z + ldot.z * dt);
 
     // Clamp pitch and yaw rates by limiting momentum
@@ -181,10 +187,18 @@ pub fn step_submarine_dbg(
     let r_max = 0.6; // ~34 deg/s
     let l_x_max = spec.ixx * q_max;
     let l_y_max = spec.iyy * r_max;
-    if state.ang_mom.x > l_x_max { state.ang_mom.x = l_x_max; }
-    if state.ang_mom.x < -l_x_max { state.ang_mom.x = -l_x_max; }
-    if state.ang_mom.y > l_y_max { state.ang_mom.y = l_y_max; }
-    if state.ang_mom.y < -l_y_max { state.ang_mom.y = -l_y_max; }
+    if state.ang_mom.x > l_x_max {
+        state.ang_mom.x = l_x_max;
+    }
+    if state.ang_mom.x < -l_x_max {
+        state.ang_mom.x = -l_x_max;
+    }
+    if state.ang_mom.y > l_y_max {
+        state.ang_mom.y = l_y_max;
+    }
+    if state.ang_mom.y < -l_y_max {
+        state.ang_mom.y = -l_y_max;
+    }
 
     // Update orientation using body-frame angular velocities (post-multiply deltas)
     omega_body = Vec3f::new(
@@ -193,7 +207,11 @@ pub fn step_submarine_dbg(
         state.ang_mom.z * inv_izz,
     );
     // Debug yaw acceleration from Euler equation: omega_dot_y = Ldot_y / Iyy
-    let yaw_acc = if spec.iyy > 0.0 { ldot.y * inv_iyy } else { 0.0 };
+    let yaw_acc = if spec.iyy > 0.0 {
+        ldot.y * inv_iyy
+    } else {
+        0.0
+    };
     let delta_yaw = Quatf::from_axis_angle(BODY_UP, omega_body.y * dt);
     // Pitch about body-right (+X)
     let delta_pitch = Quatf::from_axis_angle(BODY_RIGHT, omega_body.x * dt);
@@ -278,8 +296,15 @@ fn compute_cg_body_current(spec: &SubPhysicsSpec, state: &SubState) -> (Vec3f, f
 
     for (i, tank) in spec.ballast_tanks.iter().enumerate() {
         let cap = tank.capacity_kg.max(0.0);
-        if cap <= 0.0 { continue; }
-        let fill = state.ballast_fill.get(i).copied().unwrap_or(0.0).clamp(0.0, 1.0);
+        if cap <= 0.0 {
+            continue;
+        }
+        let fill = state
+            .ballast_fill
+            .get(i)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
         let m = cap * fill;
         if m > 0.0 {
             m_total += m;
@@ -297,15 +322,21 @@ fn compute_cg_body_current(spec: &SubPhysicsSpec, state: &SubState) -> (Vec3f, f
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BallastTankSpec};
+    use crate::BallastTankSpec;
 
     fn spec_with_two_tanks() -> SubPhysicsSpec {
         let mut s = crate::subspecs::small_skiff_spec();
         // Override to two symmetric tanks on +X and -X with round numbers
         s.m = 100.0;
         s.ballast_tanks = vec![
-            BallastTankSpec { pos_body: Vec3f::new(1.0, 0.0, 0.0), capacity_kg: 20.0 },
-            BallastTankSpec { pos_body: Vec3f::new(-1.0, 0.0, 0.0), capacity_kg: 20.0 },
+            BallastTankSpec {
+                pos_body: Vec3f::new(1.0, 0.0, 0.0),
+                capacity_kg: 20.0,
+            },
+            BallastTankSpec {
+                pos_body: Vec3f::new(-1.0, 0.0, 0.0),
+                capacity_kg: 20.0,
+            },
         ];
         s
     }
@@ -331,7 +362,12 @@ mod tests {
         assert!((m_total - (spec.m + 20.0)).abs() < 1e-6);
         // cg.x = (20*1) / (hull + 20)
         let expected_x = 20.0 / (spec.m + 20.0);
-        assert!((cg.x - expected_x).abs() < 1e-6, "cg.x={}, expected={}", cg.x, expected_x);
+        assert!(
+            (cg.x - expected_x).abs() < 1e-6,
+            "cg.x={}, expected={}",
+            cg.x,
+            expected_x
+        );
         assert!(cg.y.abs() < 1e-6 && cg.z.abs() < 1e-6);
     }
 

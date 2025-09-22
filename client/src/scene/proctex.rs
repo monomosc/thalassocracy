@@ -1,7 +1,7 @@
+use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
 use bevy::render::render_asset::RenderAssetUsages;
-use bevy::image::{ImageSampler, ImageSamplerDescriptor, ImageAddressMode, ImageFilterMode};
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
 
 #[derive(Resource, Default)]
 pub struct ProcTexAssets {
@@ -24,7 +24,11 @@ fn generate_stone_texture(mut images: ResMut<Assets<Image>>, mut out: ResMut<Pro
     let seed: u32 = 0x00C0_FFEE;
     let data = make_improved_rock_rgba(w as usize, h as usize, seed);
     let mut image = Image::new(
-        Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
         TextureDimension::D2,
         data,
         TextureFormat::Rgba8UnormSrgb,
@@ -45,9 +49,13 @@ fn generate_stone_texture(mut images: ResMut<Assets<Image>>, mut out: ResMut<Pro
 
 // ---------------------- noise helpers ----------------------
 
-fn fade(t: f32) -> f32 { t * t * t * (t * (t * 6.0 - 15.0) + 10.0) }
+fn fade(t: f32) -> f32 {
+    t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+}
 
-fn lerp(a: f32, b: f32, t: f32) -> f32 { a + (b - a) * t }
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
 
 fn hash2(ix: i32, iy: i32, seed: u32) -> u32 {
     // A simple 2D integer hash (mix) — enough for procedural noise
@@ -107,7 +115,13 @@ fn fbm2_tileable(x: f32, y: f32, base_period: i32, octaves: i32, seed: u32) -> f
     let mut freq = 1.0;
     for o in 0..octaves {
         let p = (base_period as f32 / freq).round().max(1.0) as i32;
-        let n = perlin2_periodic(x * freq, y * freq, p, p, seed ^ (o as u32).wrapping_mul(0x9E37_79B9));
+        let n = perlin2_periodic(
+            x * freq,
+            y * freq,
+            p,
+            p,
+            seed ^ (o as u32).wrapping_mul(0x9E37_79B9),
+        );
         f += n * amp;
         amp *= 0.5;
         freq *= 2.0;
@@ -128,8 +142,20 @@ fn make_improved_rock_rgba(w: usize, h: usize, seed: u32) -> Vec<u8> {
             let ny0 = y as f32 / h as f32 * base_period as f32;
 
             // Low-frequency warp (two channels)
-            let wx = fbm2_tileable(nx0 * warp_freq + 11.3, ny0 * warp_freq + 7.1, base_period, 3, seed ^ 0xA1B2_C3D4);
-            let wy = fbm2_tileable(nx0 * warp_freq - 5.7, ny0 * warp_freq - 9.4, base_period, 3, seed ^ 0x33EE_7731);
+            let wx = fbm2_tileable(
+                nx0 * warp_freq + 11.3,
+                ny0 * warp_freq + 7.1,
+                base_period,
+                3,
+                seed ^ 0xA1B2_C3D4,
+            );
+            let wy = fbm2_tileable(
+                nx0 * warp_freq - 5.7,
+                ny0 * warp_freq - 9.4,
+                base_period,
+                3,
+                seed ^ 0x33EE_7731,
+            );
             let nx = nx0 + wx * warp_amp;
             let ny = ny0 + wy * warp_amp;
 
@@ -144,7 +170,13 @@ fn make_improved_rock_rgba(w: usize, h: usize, seed: u32) -> Vec<u8> {
             veins = veins.powf(6.0); // thin lines
 
             // Cavity mask: darker pits
-            let cav = fbm2_tileable(nx * 3.7 + 3.0, ny * 3.7 - 2.0, base_period, 4, seed ^ 0x517C_C881);
+            let cav = fbm2_tileable(
+                nx * 3.7 + 3.0,
+                ny * 3.7 - 2.0,
+                base_period,
+                4,
+                seed ^ 0x517C_C881,
+            );
             let cav_mask = ((-cav).max(0.0)).powf(1.6);
 
             // Compose luminance
@@ -152,7 +184,13 @@ fn make_improved_rock_rgba(w: usize, h: usize, seed: u32) -> Vec<u8> {
             lum = lum.clamp(0.0, 1.0);
 
             // Subtle hue variation between cool and warm rock tints
-            let hue = fbm2_tileable(nx * 0.9 + 1.7, ny * 0.9 - 4.2, base_period, 2, seed ^ 0xDEAD_BEEF);
+            let hue = fbm2_tileable(
+                nx * 0.9 + 1.7,
+                ny * 0.9 - 4.2,
+                base_period,
+                2,
+                seed ^ 0xDEAD_BEEF,
+            );
             let tint_t = (hue * 0.5 + 0.5).clamp(0.0, 1.0);
             let cool = (0.62, 0.66, 0.70);
             let warm = (0.58, 0.57, 0.55);
@@ -161,7 +199,13 @@ fn make_improved_rock_rgba(w: usize, h: usize, seed: u32) -> Vec<u8> {
             let b = lum * (warm.2 * (1.0 - tint_t) + cool.2 * tint_t);
 
             // Minor speckle for grain
-            let speck = perlin2_periodic(nx * 12.0, ny * 12.0, base_period, base_period, seed ^ 0x1357_9BDF);
+            let speck = perlin2_periodic(
+                nx * 12.0,
+                ny * 12.0,
+                base_period,
+                base_period,
+                seed ^ 0x1357_9BDF,
+            );
             let s = (speck * 0.5 + 0.5) * 0.05; // +/-5%
             let rr = (r + s).clamp(0.0, 1.0);
             let gg = (g + s * 0.8).clamp(0.0, 1.0);

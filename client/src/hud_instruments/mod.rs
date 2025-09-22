@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-pub mod flow;
 pub mod ballast;
+pub mod flow;
 
 pub use flow::HudInstrumentState;
 
@@ -9,8 +9,19 @@ pub struct HudInstrumentsPlugin;
 
 impl Plugin for HudInstrumentsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (flow::spawn_flow_instr, ballast::spawn_ballast_hud))
-            .add_systems(Update, (sanitize_ui_nodes, flow::update_hud_instr_state, flow::draw_flow_instr, ballast::update_ballast_hud));
+        app.add_systems(
+            Startup,
+            (flow::spawn_flow_instr, ballast::spawn_ballast_hud),
+        )
+        .add_systems(
+            Update,
+            (
+                sanitize_ui_nodes,
+                flow::update_hud_instr_state,
+                flow::draw_flow_instr,
+                ballast::update_ballast_hud,
+            ),
+        );
     }
 }
 
@@ -63,7 +74,9 @@ fn sanitize_ui_nodes(mut q: Query<(Entity, &mut Node, Option<&Name>)>) {
         n.border = b;
 
         if !dirty.is_empty() {
-            let label = name.map(|n| n.as_str().to_string()).unwrap_or_else(|| format!("Entity#{:?}", e));
+            let label = name
+                .map(|n| n.as_str().to_string())
+                .unwrap_or_else(|| format!("Entity#{:?}", e));
             tracing::warn!(target: "ui_sanitize", node=%label, fields=?dirty, "Sanitized non-finite UI values");
         }
     }

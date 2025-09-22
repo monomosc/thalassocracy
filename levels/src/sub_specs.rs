@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::Vec3f;
+use serde::{Deserialize, Serialize};
 
 /// Precomputed physics parameters for a specific submarine hull class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,11 +88,11 @@ pub mod subspecs {
             volume_m3: std::f32::consts::PI * radius * radius * length,
             // Controls
             t_max: 1200.0, // N
-            tau_thr: 2.5, // s
+            tau_thr: 2.5,  // s
             // Rudder effectiveness
             n_delta_r: 0.02,
             // Weathervane effectiveness
-            n_beta: 0.03,
+            n_beta: 0.015,
             m_delta_b: 1200.0,
             delta_r_max: 1.0,
             delta_b_max: 1.0,
@@ -103,10 +103,16 @@ pub mod subspecs {
             s_side,
             s_top,
             ballast_tanks: vec![
-                BallastTankSpec { pos_body: Vec3f::new( 0.9, 0.0, 0.0), capacity_kg: 30.0 }, // forward
-                BallastTankSpec { pos_body: Vec3f::new(-0.9, 0.0, 0.0), capacity_kg: 30.0 }, // aft
+                BallastTankSpec {
+                    pos_body: Vec3f::new(0.9, 0.0, 0.0),
+                    capacity_kg: 30.0,
+                }, // forward
+                BallastTankSpec {
+                    pos_body: Vec3f::new(-0.9, 0.0, 0.0),
+                    capacity_kg: 30.0,
+                }, // aft
             ],
-            n_ws: 0.08,
+            n_ws: 0.16,
             y_delta_r: 0.0,
             cb_offset_body: Vec3f::new(0.0, 0.12, 0.0),
         }

@@ -40,7 +40,9 @@ pub fn draw_flow_gizmos(
     q: Query<(&GlobalTransform, &FlowField, &TunnelBounds), With<Tunnel>>,
     time: Res<Time>,
 ) {
-    let Some(vis) = vis else { return; };
+    let Some(vis) = vis else {
+        return;
+    };
     if !vis.flow_arrows {
         return;
     }
@@ -73,11 +75,7 @@ pub fn draw_flow_gizmos(
                     let dir = flow;
                     if dir.length_squared() > 1e-6 {
                         let len = 0.8 + variance; // visualize variance as arrow length contribution
-                        gizmos.arrow(
-                            pos,
-                            pos + dir.normalize() * len,
-                            Color::srgb(0.2, 0.7, 1.0),
-                        );
+                        gizmos.arrow(pos, pos + dir.normalize() * len, Color::srgb(0.2, 0.7, 1.0));
                     }
                 }
             }

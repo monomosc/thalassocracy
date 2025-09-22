@@ -1,4 +1,7 @@
-use levels::{builtins::greybox_level, FlowFieldSpec, LevelSpec, SubInputs, SubState, Vec3f, step_submarine, Quatf};
+use levels::{
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
+    Vec3f,
+};
 
 #[inline]
 fn yaw_of(q: Quatf) -> f32 {
@@ -8,7 +11,10 @@ fn yaw_of(q: Quatf) -> f32 {
 }
 
 fn level_with_uniform_flow(mut base: LevelSpec, flow: Vec3f) -> LevelSpec {
-    base.tunnel.flow = FlowFieldSpec::Uniform { flow, variance: 0.0 };
+    base.tunnel.flow = FlowFieldSpec::Uniform {
+        flow,
+        variance: 0.0,
+    };
     base
 }
 
@@ -29,14 +35,23 @@ fn yaw_stability_tailflow_dt_1ms() {
     let dt = 0.001; // 1 ms
     let ticks = 1000;
     let mut t = 0.0;
-    let inputs = SubInputs { thrust: 0.0, yaw: 0.0, pump_fwd: 0.0, pump_aft: 0.0 };
+    let inputs = SubInputs {
+        thrust: 0.0,
+        yaw: 0.0,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
     for _ in 0..ticks {
         step_submarine(&level, &spec, inputs, &mut state, dt, t);
         t += dt;
     }
     let yaw = yaw_of(state.orientation);
     let eps = 0.02_f32; // ~1.1 degrees
-    assert!(yaw.abs() <= eps, "yaw drifted under tailflow at 1ms dt: yaw={}", yaw);
+    assert!(
+        yaw.abs() <= eps,
+        "yaw drifted under tailflow at 1ms dt: yaw={}",
+        yaw
+    );
 }
 
 #[test]
@@ -56,12 +71,21 @@ fn yaw_stability_tailflow_dt_10ms() {
     let dt = 0.01; // 10 ms
     let ticks = 1000;
     let mut t = 0.0;
-    let inputs = SubInputs { thrust: 0.0, yaw: 0.0, pump_fwd: 0.0, pump_aft: 0.0 };
+    let inputs = SubInputs {
+        thrust: 0.0,
+        yaw: 0.0,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
     for _ in 0..ticks {
         step_submarine(&level, &spec, inputs, &mut state, dt, t);
         t += dt;
     }
     let yaw = yaw_of(state.orientation);
     let eps = 0.02_f32; // ~1.1 degrees
-    assert!(yaw.abs() <= eps, "yaw drifted under tailflow at 10ms dt: yaw={}", yaw);
+    assert!(
+        yaw.abs() <= eps,
+        "yaw drifted under tailflow at 10ms dt: yaw={}",
+        yaw
+    );
 }

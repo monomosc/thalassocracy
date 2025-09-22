@@ -1,43 +1,66 @@
 use bevy::app::Plugin as BevyPlugin;
 use bevy::prelude::*;
-use bevy::render::render_resource::binding_types::{sampler, texture_2d, texture_depth_2d, uniform_buffer};
+use bevy::render::render_graph::{
+    NodeRunError, RenderGraphApp, RenderGraphContext, ViewNodeRunner,
+};
+use bevy::render::render_resource::binding_types::{
+    sampler, texture_2d, texture_depth_2d, uniform_buffer,
+};
 use bevy::render::render_resource::*;
-use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner, NodeRunError, RenderGraphContext};
 use bevy::render::renderer::RenderContext;
-use bevy::render::view::{ViewTarget, ViewDepthTexture};
+use bevy::render::view::{ViewDepthTexture, ViewTarget};
 // no Extract import needed
+use bevy::asset::{load_internal_asset, Handle};
+use bevy::ecs::query::QueryItem;
+use bevy::prelude::Shader;
+use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+use bevy::render::Render;
 use bevy::render::RenderApp;
 use bevy::render::RenderSet;
-use bevy::render::Render;
-use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
-use bevy::asset::{load_internal_asset, Handle};
-use bevy::prelude::Shader;
-use bevy::ecs::query::QueryItem;
 
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
+use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 
 // A simple screen-space water post-process that adds depth-tinted absorption,
 // lightweight diffusion (scattering), and subtle refraction.
 
 #[allow(deprecated)]
-const WATER_POST_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(0x2f8e_3a80_bf21_40aa_9a9d_1d2c_8840_12aa);
+const WATER_POST_SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(0x2f8e_3a80_bf21_40aa_9a9d_1d2c_8840_12aa);
 
 pub struct WaterPostProcessPlugin;
 
 impl BevyPlugin for WaterPostProcessPlugin {
     fn build(&self, app: &mut App) {
-        load_internal_asset!(app, WATER_POST_SHADER_HANDLE, "water_post.wgsl", Shader::from_wgsl);
+        load_internal_asset!(
+            app,
+            WATER_POST_SHADER_HANDLE,
+            "water_post.wgsl",
+            Shader::from_wgsl
+        );
 
         // Extract debug toggles into the render world
         app.add_plugins(ExtractResourcePlugin::<RenderVisToggles>::default());
 
-        let Some(render_app) = app.get_sub_app_mut(RenderApp) else { return; };
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
+            return;
+        };
 
         render_app
             .init_resource::<SpecializedRenderPipelines<WaterPostPipeline>>()
-            .add_systems(Render, prepare_water_post_pipelines.in_set(RenderSet::Prepare))
+            .add_systems(
+                Render,
+                prepare_water_post_pipelines.in_set(RenderSet::Prepare),
+            )
             .add_render_graph_node::<ViewNodeRunner<WaterPostNode>>(Core3d, Node3d::Fxaa)
-            .add_render_graph_edges(Core3d, (Node3d::Tonemapping, Node3d::Fxaa, Node3d::EndMainPassPostProcessing));
+            .add_render_graph_edges(
+                Core3d,
+                (
+                    Node3d::Tonemapping,
+                    Node3d::Fxaa,
+                    Node3d::EndMainPassPostProcessing,
+                ),
+            );
     }
 
     fn finish(&self, app: &mut App) {
@@ -49,12 +72,20 @@ impl BevyPlugin for WaterPostProcessPlugin {
 
 // Extracted toggles/params from RenderSettings for use in the Render World
 #[derive(Resource, Clone, Default)]
-pub struct RenderVisToggles { pub water_post: bool, pub strength: f32, pub debug: bool }
+pub struct RenderVisToggles {
+    pub water_post: bool,
+    pub strength: f32,
+    pub debug: bool,
+}
 
 impl ExtractResource for RenderVisToggles {
     type Source = crate::render_settings::RenderSettings;
     fn extract_resource(source: &Self::Source) -> Self {
-        Self { water_post: source.water_post, strength: source.water_post_strength.max(0.0), debug: source.water_post_debug }
+        Self {
+            water_post: source.water_post,
+            strength: source.water_post_strength.max(0.0),
+            debug: source.water_post_debug,
+        }
     }
 }
 
@@ -86,7 +117,10 @@ impl FromWorld for WaterPostPipeline {
         );
         let params_bind_group_layout = device.create_bind_group_layout(
             "water_post_params_bgl",
-            &BindGroupLayoutEntries::sequential(ShaderStages::FRAGMENT, (uniform_buffer::<[f32; 4]>(false),)),
+            &BindGroupLayoutEntries::sequential(
+                ShaderStages::FRAGMENT,
+                (uniform_buffer::<[f32; 4]>(false),),
+            ),
         );
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("water_post_sampler"),
@@ -95,7 +129,12 @@ impl FromWorld for WaterPostPipeline {
             mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
-        Self { color_bind_group_layout, depth_bind_group_layout, params_bind_group_layout, sampler }
+        Self {
+            color_bind_group_layout,
+            depth_bind_group_layout,
+            params_bind_group_layout,
+            sampler,
+        }
     }
 }
 
@@ -121,7 +160,7 @@ impl SpecializedRenderPipeline for WaterPostPipeline {
                 self.depth_bind_group_layout.clone(),
                 self.params_bind_group_layout.clone(),
             ],
-            vertex: bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state(),
+            vertex: fullscreen_shader_vertex_state(),
             fragment: Some(FragmentState {
                 shader: WATER_POST_SHADER_HANDLE,
                 shader_defs: if key.hdr { vec!["HDR".into()] } else { vec![] },
@@ -149,9 +188,22 @@ pub fn prepare_water_post_pipelines(
     views: Query<(Entity, &bevy::render::view::ExtractedView)>,
 ) {
     for (entity, view) in &views {
-        let fmt = if view.hdr { ViewTarget::TEXTURE_FORMAT_HDR } else { TextureFormat::bevy_default() };
-        let id = pipelines.specialize(&pipeline_cache, &pipe, WaterPostPipelineKey { format: fmt, hdr: view.hdr });
-        commands.entity(entity).insert(CameraWaterPostPipeline { pipeline_id: id });
+        let fmt = if view.hdr {
+            ViewTarget::TEXTURE_FORMAT_HDR
+        } else {
+            TextureFormat::bevy_default()
+        };
+        let id = pipelines.specialize(
+            &pipeline_cache,
+            &pipe,
+            WaterPostPipelineKey {
+                format: fmt,
+                hdr: view.hdr,
+            },
+        );
+        commands
+            .entity(entity)
+            .insert(CameraWaterPostPipeline { pipeline_id: id });
     }
 }
 
@@ -176,8 +228,13 @@ impl bevy::render::render_graph::ViewNode for WaterPostNode {
         world: &World,
     ) -> Result<(), NodeRunError> {
         // Toggle via extracted render settings
-        let toggles = match world.get_resource::<RenderVisToggles>() { Some(t) => t, None => return Ok(()) };
-        if !toggles.water_post { return Ok(()); }
+        let toggles = match world.get_resource::<RenderVisToggles>() {
+            Some(t) => t,
+            None => return Ok(()),
+        };
+        if !toggles.water_post {
+            return Ok(());
+        }
         let pipeline_cache = world.resource::<PipelineCache>();
         let post_pipe = world.resource::<WaterPostPipeline>();
 
@@ -228,7 +285,12 @@ impl bevy::render::render_graph::ViewNode for WaterPostNode {
         };
 
         // Create or update params bind group
-        let params_data = [toggles.strength, if toggles.debug { 1.0 } else { 0.0 }, 0.0, 0.0];
+        let params_data = [
+            toggles.strength,
+            if toggles.debug { 1.0 } else { 0.0 },
+            0.0,
+            0.0,
+        ];
         let device = render_context.render_device();
         let params_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("water_post_params"),
@@ -253,7 +315,9 @@ impl bevy::render::render_graph::ViewNode for WaterPostNode {
             timestamp_writes: None,
             occlusion_query_set: None,
         };
-        let mut pass = render_context.command_encoder().begin_render_pass(&pass_desc);
+        let mut pass = render_context
+            .command_encoder()
+            .begin_render_pass(&pass_desc);
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, color_bg, &[]);
         pass.set_bind_group(1, depth_bg, &[]);

@@ -1,6 +1,6 @@
-use bevy::prelude::*;
 use bevy::math::primitives::Sphere;
 use bevy::pbr::{MeshMaterial3d, NotShadowCaster, StandardMaterial};
+use bevy::prelude::*;
 
 #[derive(Resource, Default)]
 struct LightBulbAssets {
@@ -17,7 +17,12 @@ pub struct LightBulb {
 }
 
 impl Default for LightBulb {
-    fn default() -> Self { Self { color: Color::srgb(1.0, 0.95, 0.85), strength: 1.0 } }
+    fn default() -> Self {
+        Self {
+            color: Color::srgb(1.0, 0.95, 0.85),
+            strength: 1.0,
+        }
+    }
 }
 
 #[derive(Component)]
@@ -32,7 +37,14 @@ impl Plugin for LightBulbPlugin {
             .register_type::<BlinkingLight>()
             .register_type::<LightShadowOverride>()
             .add_systems(Startup, setup_assets)
-            .add_systems(Update, (ensure_bulb_visual_and_setup, tick_blinking_lights, update_bulb_properties));
+            .add_systems(
+                Update,
+                (
+                    ensure_bulb_visual_and_setup,
+                    tick_blinking_lights,
+                    update_bulb_properties,
+                ),
+            );
     }
 }
 
@@ -59,19 +71,27 @@ pub struct BlinkingLight {
 }
 
 impl Default for BlinkingLight {
-    fn default() -> Self { Self { period: 1.0, on_fraction: 0.2, on_intensity: 1.0, off_intensity: 0.0 } }
+    fn default() -> Self {
+        Self {
+            period: 1.0,
+            on_fraction: 0.2,
+            on_intensity: 1.0,
+            off_intensity: 0.0,
+        }
+    }
 }
 
-fn tick_blinking_lights(
-    time: Res<Time>,
-    mut q: Query<(&BlinkingLight, &mut LightBulb)>,
-) {
+fn tick_blinking_lights(time: Res<Time>, mut q: Query<(&BlinkingLight, &mut LightBulb)>) {
     let t = time.elapsed_secs();
     for (blink, mut bulb) in &mut q {
         let period = blink.period.max(1e-3);
         let phase = (t % period) / period; // 0..1
         let on_frac = blink.on_fraction.clamp(0.0, 1.0);
-        let target = if phase < on_frac { blink.on_intensity } else { blink.off_intensity };
+        let target = if phase < on_frac {
+            blink.on_intensity
+        } else {
+            blink.off_intensity
+        };
         if (bulb.strength - target).abs() > f32::EPSILON {
             bulb.strength = target;
         }
@@ -105,7 +125,8 @@ fn ensure_bulb_visual_and_setup(
                     bulb.color.to_linear().green,
                     bulb.color.to_linear().blue,
                     0.0,
-                ) * bulb.strength.max(0.0) * 20.0,
+                ) * bulb.strength.max(0.0)
+                    * 20.0,
                 perceptual_roughness: 0.3,
                 metallic: 0.2,
                 ..Default::default()
@@ -128,7 +149,15 @@ fn ensure_bulb_visual_and_setup(
 
 #[allow(clippy::type_complexity)]
 fn update_bulb_properties(
-    bulb_q: Query<(Entity, &LightBulb, Option<&Children>, Option<&LightShadowOverride>), Changed<LightBulb>>,
+    bulb_q: Query<
+        (
+            Entity,
+            &LightBulb,
+            Option<&Children>,
+            Option<&LightShadowOverride>,
+        ),
+        Changed<LightBulb>,
+    >,
     mut point_q: Query<&mut PointLight>,
     mut mat_q: Query<&mut MeshMaterial3d<StandardMaterial>, With<LightBulbVisual>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -138,7 +167,9 @@ fn update_bulb_properties(
         if let Ok(mut pl) = point_q.get_mut(e) {
             pl.color = bulb.color;
             pl.intensity = bulb.strength.max(0.0) * 50_000.0;
-            if let Some(LightShadowOverride(enabled)) = shadow_override { pl.shadows_enabled = *enabled; }
+            if let Some(LightShadowOverride(enabled)) = shadow_override {
+                pl.shadows_enabled = *enabled;
+            }
         }
         // Update emissive of visual child
         if let Some(children) = children {
@@ -148,7 +179,8 @@ fn update_bulb_properties(
                         m.base_color = bulb.color;
                         let lin = bulb.color.to_linear();
                         m.emissive = LinearRgba::new(lin.red, lin.green, lin.blue, 0.0)
-                            * bulb.strength.max(0.0) * 20.0;
+                            * bulb.strength.max(0.0)
+                            * 20.0;
                     }
                 }
             }

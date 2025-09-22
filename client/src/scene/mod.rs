@@ -1,16 +1,16 @@
 use bevy::prelude::*;
 
-pub mod setup;
+pub mod camera;
 pub mod flow_field;
 pub mod greybox;
-pub mod proctex;
-pub mod ore;
 pub mod light_bulb;
-pub mod submarine;
-pub mod camera;
-pub mod water;
+pub mod ore;
 pub mod postprocess;
-pub mod volumetric_cone_material;
+pub mod proctex;
+pub mod render;
+pub mod setup;
+pub mod submarine;
+pub mod water;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SimSet;
@@ -41,6 +41,7 @@ impl Plugin for ScenePlugin {
             );
 
         // Lightweight underwater look and feel
+        app.add_plugins(render::volumetric_floodlights::VolumetricFloodlightsPlugin);
         app.add_plugins(water::WaterFxPlugin);
         app.add_plugins(postprocess::WaterPostProcessPlugin);
         app.add_plugins(ore::OrePlugin);

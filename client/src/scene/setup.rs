@@ -1,7 +1,7 @@
-use bevy::prelude::*;
 use bevy::math::primitives::Cuboid;
 use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::Mesh3d;
+use bevy::prelude::*;
 
 // Cameras are spawned in world.rs (single unified camera)
 

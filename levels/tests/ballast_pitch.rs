@@ -1,7 +1,13 @@
-use levels::{builtins::greybox_level, FlowFieldSpec, LevelSpec, SubInputs, SubState, Vec3f, step_submarine, Quatf};
+use levels::{
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
+    Vec3f,
+};
 
 fn calm_level(mut base: LevelSpec) -> LevelSpec {
-    base.tunnel.flow = FlowFieldSpec::Uniform { flow: Vec3f::new(0.0, 0.0, 0.0), variance: 0.0 };
+    base.tunnel.flow = FlowFieldSpec::Uniform {
+        flow: Vec3f::new(0.0, 0.0, 0.0),
+        variance: 0.0,
+    };
     base
 }
 
@@ -26,16 +32,27 @@ fn forward_full_aft_empty_pitches_nose_down() {
     }
 
     // No thrust or rudder; no pumps during the test
-    let inputs = SubInputs { thrust: 0.0, yaw: 0.0, pump_fwd: 0.0, pump_aft: 0.0 };
-    let dt = 1.0 / 60.0; let mut t = 0.0f32;
+    let inputs = SubInputs {
+        thrust: 0.0,
+        yaw: 0.0,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
+    let dt = 1.0 / 60.0;
+    let mut t = 0.0f32;
 
     // Run for a short while to integrate pitch
-    for _ in 0..900 { // 15 seconds
+    for _ in 0..900 {
+        // 15 seconds
         step_submarine(&level, &spec, inputs, &mut state, dt, t);
         t += dt;
     }
 
     // Forward vector should have a negative Y component (nose pitched downward)
     let fwd = state.orientation * Vec3f::new(1.0, 0.0, 0.0);
-    assert!(fwd.y < -0.02, "expected nose-down pitch; forward.y = {}", fwd.y);
+    assert!(
+        fwd.y < -0.02,
+        "expected nose-down pitch; forward.y = {}",
+        fwd.y
+    );
 }

@@ -1,5 +1,5 @@
-use crate::{Quatf, SubPhysicsSpec, SubState, Vec3f};
 use super::util::quat_rotate_vec3;
+use crate::{Quatf, SubPhysicsSpec, SubState, Vec3f};
 
 // ----- Yaw torques -----
 pub(super) fn torque_yaw_control(
@@ -49,9 +49,16 @@ pub(super) fn torque_from_ballast_gravity_about_axis(
     let mut tau = 0.0_f32;
     for (i, tank) in spec.ballast_tanks.iter().enumerate() {
         let cap = tank.capacity_kg.max(0.0);
-        let fill = state.ballast_fill.get(i).copied().unwrap_or(0.0).clamp(0.0, 1.0);
+        let fill = state
+            .ballast_fill
+            .get(i)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
         let m = cap * fill;
-        if m <= 0.0 { continue; }
+        if m <= 0.0 {
+            continue;
+        }
 
         let r_body = tank.pos_body - cg_body_current;
         let r_world = quat_rotate_vec3(orientation, r_body);
@@ -95,9 +102,9 @@ pub(super) fn torque_roll_linear_damping(spec: &SubPhysicsSpec, omega_z: f32) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Vec3f, Quatf};
     use crate::subspecs::small_skiff_spec;
     use crate::SubState;
+    use crate::{Quatf, Vec3f};
 
     fn make_state_with_fill(fill: &[f32]) -> SubState {
         SubState {
@@ -127,7 +134,8 @@ mod tests {
 
         // Reverse motion (sign_u=-1), double mount gain
         let tau_rev = torque_yaw_control(&spec, yaw_in, -1.0, 2.0, q_dyn);
-        let expected_rev = -yaw_in * -1.0 * 2.0 * spec.n_delta_r * q_dyn * spec.s_side * spec.length;
+        let expected_rev =
+            -yaw_in * -1.0 * 2.0 * spec.n_delta_r * q_dyn * spec.s_side * spec.length;
         assert!((tau_rev - expected_rev).abs() < 1e-6);
         // Opposite sign from forward case, larger magnitude
         assert!(tau_fwd.signum() != tau_rev.signum());
@@ -190,7 +198,10 @@ mod tests {
         let spec = {
             let mut s = small_skiff_spec();
             // single tank located at +Z (nose)
-            s.ballast_tanks = vec![crate::BallastTankSpec { pos_body: Vec3f::new(0.0, 0.0, 1.0), capacity_kg: 10.0 }];
+            s.ballast_tanks = vec![crate::BallastTankSpec {
+                pos_body: Vec3f::new(0.0, 0.0, 1.0),
+                capacity_kg: 10.0,
+            }];
             s
         };
         // Full fill produces m = 10 kg
@@ -200,9 +211,21 @@ mod tests {
         let g = 9.81;
 
         // Expect tau_x = r_z * m * g with r=(0,0,1)
-        let tau = torque_from_ballast_gravity_about_axis(&spec, &state, cg, state.orientation, axis_right, g);
+        let tau = torque_from_ballast_gravity_about_axis(
+            &spec,
+            &state,
+            cg,
+            state.orientation,
+            axis_right,
+            g,
+        );
         let expected = 1.0 * 10.0 * g;
-        assert!((tau - expected).abs() < 1e-4, "tau={}, expected={}", tau, expected);
+        assert!(
+            (tau - expected).abs() < 1e-4,
+            "tau={}, expected={}",
+            tau,
+            expected
+        );
     }
 
     #[test]
@@ -212,7 +235,12 @@ mod tests {
         spec.cb_offset_body = Vec3f::new(0.0, 0.0, 0.5);
         let buoy_n = 200.0; // upward N
         let axis_right = Vec3f::new(1.0, 0.0, 0.0);
-        let tau = torque_from_cob_buoyancy_about_axis(&spec, Quatf::from_rotation_y(0.0), axis_right, buoy_n);
+        let tau = torque_from_cob_buoyancy_about_axis(
+            &spec,
+            Quatf::from_rotation_y(0.0),
+            axis_right,
+            buoy_n,
+        );
         // r × F with r=(0,0,0.5), F=(0,200,0) gives (-100, 0, 0); dot with +X = -100
         assert!((tau + 100.0).abs() < 1e-4, "tau={}, expected=-100", tau);
     }

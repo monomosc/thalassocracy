@@ -1,10 +1,10 @@
-use bevy::prelude::*;
+use crate::scene::submarine::{SubTelemetry, Submarine, Velocity};
+use crate::scene::SimSet;
 use bevy::pbr::wireframe::WireframeConfig;
+use bevy::prelude::*;
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 use bevy_inspector_egui::InspectorOptions;
-use levels::{sample_flow_at, Vec3f, builtins::greybox_level};
-use crate::scene::SimSet;
-use crate::scene::submarine::{Submarine, Velocity, SubTelemetry};
+use levels::{builtins::greybox_level, sample_flow_at, Vec3f};
 
 #[derive(Resource, Debug, Clone, Reflect, InspectorOptions)]
 #[reflect(Resource)]
@@ -20,7 +20,15 @@ pub struct DebugVis {
 
 impl Default for DebugVis {
     fn default() -> Self {
-        Self { labels: false, wireframe_global: false, flow_arrows: false, overlay: true, speed_arrow: false, telemetry: true, desync_indicator: true }
+        Self {
+            labels: false,
+            wireframe_global: false,
+            flow_arrows: false,
+            overlay: true,
+            speed_arrow: false,
+            telemetry: true,
+            desync_indicator: true,
+        }
     }
 }
 
@@ -35,7 +43,15 @@ impl Plugin for DebugVisPlugin {
             .register_type::<DebugVis>()
             .add_plugins(ResourceInspectorPlugin::<DebugVis>::default())
             .add_systems(Startup, spawn_debug_overlay)
-            .add_systems(Update, (apply_wireframe_flag, apply_label_visibility, apply_overlay_visibility, update_debug_overlay))
+            .add_systems(
+                Update,
+                (
+                    apply_wireframe_flag,
+                    apply_label_visibility,
+                    apply_overlay_visibility,
+                    update_debug_overlay,
+                ),
+            )
             .add_systems(Update, draw_speed_arrow.after(SimSet));
     }
 }
@@ -47,10 +63,16 @@ fn apply_wireframe_flag(vis: Res<DebugVis>, mut cfg: ResMut<WireframeConfig>) {
 }
 
 fn apply_label_visibility(vis: Res<DebugVis>, mut q: Query<&mut Visibility, With<LabelNode>>) {
-    if !vis.is_changed() { return; }
+    if !vis.is_changed() {
+        return;
+    }
     let visible = vis.labels;
     for mut v in &mut q {
-        *v = if visible { Visibility::Visible } else { Visibility::Hidden };
+        *v = if visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
@@ -68,23 +90,40 @@ fn spawn_debug_overlay(mut commands: Commands, assets: Res<AssetServer>) {
             ..Default::default()
         },
         Text::new(String::new()),
-        TextFont { font, font_size: 16.0, ..Default::default() },
+        TextFont {
+            font,
+            font_size: 16.0,
+            ..Default::default()
+        },
         TextColor(Color::WHITE),
         DebugOverlayNode,
         Name::new("Debug Overlay"),
     ));
 }
 
-fn apply_overlay_visibility(vis: Res<DebugVis>, mut q: Query<&mut Visibility, With<DebugOverlayNode>>) {
-    if !vis.is_changed() { return; }
+fn apply_overlay_visibility(
+    vis: Res<DebugVis>,
+    mut q: Query<&mut Visibility, With<DebugOverlayNode>>,
+) {
+    if !vis.is_changed() {
+        return;
+    }
     let visible = vis.overlay;
     for mut v in &mut q {
-        *v = if visible { Visibility::Visible } else { Visibility::Hidden };
+        *v = if visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
 #[derive(Resource, Default)]
-struct OverlayLastYaw { yaw: f32, time: f32, rate: f32 }
+struct OverlayLastYaw {
+    yaw: f32,
+    time: f32,
+    rate: f32,
+}
 
 #[allow(clippy::too_many_arguments)]
 fn update_debug_overlay(
@@ -98,7 +137,9 @@ fn update_debug_overlay(
     pause: Option<Res<crate::sim_pause::SimPause>>,
     desync: Option<Res<crate::desync_metrics::DesyncMetrics>>,
 ) {
-    let Ok(mut text) = q_text.single_mut() else { return; };
+    let Ok(mut text) = q_text.single_mut() else {
+        return;
+    };
     let Ok((transform, vel)) = q_sub.single() else {
         text.0 = "No submarine".to_string();
         return;
@@ -116,18 +157,34 @@ fn update_debug_overlay(
     let dt = (t - last.time).max(1e-3);
     let mut dyaw = yaw - last.yaw;
     // unwrap to nearest
-    if dyaw > std::f32::consts::PI { dyaw -= std::f32::consts::TAU; }
-    if dyaw < -std::f32::consts::PI { dyaw += std::f32::consts::TAU; }
+    if dyaw > std::f32::consts::PI {
+        dyaw -= std::f32::consts::TAU;
+    }
+    if dyaw < -std::f32::consts::PI {
+        dyaw += std::f32::consts::TAU;
+    }
     last.rate = dyaw / dt;
     last.yaw = yaw;
     last.time = t;
 
     // Inputs
-    let (thrust, rudder) = if let Some(c) = controls { (c.value, c.yaw) } else { (0.0, 0.0) };
+    let (thrust, rudder) = if let Some(c) = controls {
+        (c.value, c.yaw)
+    } else {
+        (0.0, 0.0)
+    };
 
     // Flow sample
     let level = greybox_level();
-    let (flow, _var) = sample_flow_at(&level, Vec3f { x: p.x, y: p.y, z: p.z }, t);
+    let (flow, _var) = sample_flow_at(
+        &level,
+        Vec3f {
+            x: p.x,
+            y: p.y,
+            z: p.z,
+        },
+        t,
+    );
     let flow_mag = (flow.x * flow.x + flow.y * flow.y + flow.z * flow.z).sqrt();
     let rel = Vec3::new(v.x - flow.x, v.y - flow.y, v.z - flow.z);
     let rel_speed = rel.length();
@@ -147,7 +204,9 @@ fn update_debug_overlay(
         } else {
             "\nSYNC n/a".to_string()
         }
-    } else { String::new() };
+    } else {
+        String::new()
+    };
 
     if vis.telemetry {
         if let Some(t) = telemetry {
@@ -201,9 +260,15 @@ fn draw_speed_arrow(
     q_sub: Query<(&Transform, &Velocity), With<Submarine>>,
     time: Res<Time>,
 ) {
-    let Some(vis) = vis else { return; };
-    if !vis.speed_arrow { return; }
-    let Ok((transform, vel)) = q_sub.single() else { return; };
+    let Some(vis) = vis else {
+        return;
+    };
+    if !vis.speed_arrow {
+        return;
+    }
+    let Ok((transform, vel)) = q_sub.single() else {
+        return;
+    };
     let p = transform.translation + Vec3::Y * 1.5;
     let v_world = **vel;
     let speed_w = v_world.length();
@@ -215,7 +280,15 @@ fn draw_speed_arrow(
 
     // Also draw water-relative velocity arrow (cyan) for clarity
     let level = greybox_level();
-    let (flow, _var) = sample_flow_at(&level, Vec3f { x: p.x, y: p.y, z: p.z }, time.elapsed_secs());
+    let (flow, _var) = sample_flow_at(
+        &level,
+        Vec3f {
+            x: p.x,
+            y: p.y,
+            z: p.z,
+        },
+        time.elapsed_secs(),
+    );
     let v_rel = v_world - Vec3::new(flow.x, flow.y, flow.z);
     let speed_rel = v_rel.length();
     if speed_rel >= 1e-3 {

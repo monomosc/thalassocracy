@@ -1,4 +1,7 @@
-use levels::{builtins::greybox_level, FlowFieldSpec, LevelSpec, SubInputs, SubState, Vec3f, step_submarine, Quatf};
+use levels::{
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
+    Vec3f,
+};
 
 #[inline]
 fn yaw_of(q: Quatf) -> f32 {
@@ -7,7 +10,10 @@ fn yaw_of(q: Quatf) -> f32 {
 }
 
 fn level_with_uniform_flow(mut base: LevelSpec, flow: Vec3f) -> LevelSpec {
-    base.tunnel.flow = FlowFieldSpec::Uniform { flow, variance: 0.0 };
+    base.tunnel.flow = FlowFieldSpec::Uniform {
+        flow,
+        variance: 0.0,
+    };
     base
 }
 
@@ -29,16 +35,37 @@ fn right_rudder_decreases_yaw_when_moving_forward() {
     let mut t = 0.0f32;
 
     // Warm up to get forward relative flow
-    let warm = SubInputs { thrust: 0.5, yaw: 0.0, pump_fwd: 0.0, pump_aft: 0.0 };
-    for _ in 0..600 { step_submarine(&level, &spec, warm, &mut state, dt, t); t += dt; }
+    let warm = SubInputs {
+        thrust: 0.5,
+        yaw: 0.0,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
+    for _ in 0..600 {
+        step_submarine(&level, &spec, warm, &mut state, dt, t);
+        t += dt;
+    }
     let yaw0 = yaw_of(state.orientation);
 
     // Apply right rudder (positive input) while moving forward
-    let steer = SubInputs { thrust: 0.5, yaw: 0.3, pump_fwd: 0.0, pump_aft: 0.0 };
-    for _ in 0..600 { step_submarine(&level, &spec, steer, &mut state, dt, t); t += dt; }
+    let steer = SubInputs {
+        thrust: 0.5,
+        yaw: 0.3,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
+    for _ in 0..600 {
+        step_submarine(&level, &spec, steer, &mut state, dt, t);
+        t += dt;
+    }
     let yaw1 = yaw_of(state.orientation);
 
-    assert!(yaw1 > yaw0 + 0.005, "right rudder should increase yaw (right-turn) under forward motion (yaw0={}, yaw1={})", yaw0, yaw1);
+    assert!(
+        yaw1 > yaw0 + 0.005,
+        "right rudder should increase yaw (right-turn) under forward motion (yaw0={}, yaw1={})",
+        yaw0,
+        yaw1
+    );
 }
 
 #[test]
@@ -55,17 +82,39 @@ fn right_rudder_decreases_yaw_when_moving_backward() {
         ballast_fill: vec![0.0; spec.ballast_tanks.len()],
     };
 
-    let dt = 1.0 / 60.0; let mut t = 0.0f32;
+    let dt = 1.0 / 60.0;
+    let mut t = 0.0f32;
 
     // Warm up backward (negative thrust) to get reversed relative flow
-    let warm = SubInputs { thrust: -0.6, yaw: 0.0, pump_fwd: 0.0, pump_aft: 0.0 };
-    for _ in 0..600 { step_submarine(&level, &spec, warm, &mut state, dt, t); t += dt; }
+    let warm = SubInputs {
+        thrust: -0.6,
+        yaw: 0.0,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
+    for _ in 0..600 {
+        step_submarine(&level, &spec, warm, &mut state, dt, t);
+        t += dt;
+    }
     let yaw0 = yaw_of(state.orientation);
 
     // Apply right rudder (positive input) while moving backward
-    let steer = SubInputs { thrust: -0.6, yaw: 0.3, pump_fwd: 0.0, pump_aft: 0.0 };
-    for _ in 0..600 { step_submarine(&level, &spec, steer, &mut state, dt, t); t += dt; }
+    let steer = SubInputs {
+        thrust: -0.6,
+        yaw: 0.3,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
+    for _ in 0..600 {
+        step_submarine(&level, &spec, steer, &mut state, dt, t);
+        t += dt;
+    }
     let yaw1 = yaw_of(state.orientation);
 
-    assert!(yaw1 > yaw0 + 0.005, "right rudder should increase yaw (right-turn) under reverse motion (yaw0={}, yaw1={})", yaw0, yaw1);
+    assert!(
+        yaw1 > yaw0 + 0.005,
+        "right rudder should increase yaw (right-turn) under reverse motion (yaw0={}, yaw1={})",
+        yaw0,
+        yaw1
+    );
 }

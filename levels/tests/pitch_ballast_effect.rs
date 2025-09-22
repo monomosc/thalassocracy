@@ -1,11 +1,19 @@
-use levels::{builtins::greybox_level, FlowFieldSpec, LevelSpec, SubInputs, SubState, Vec3f, step_submarine, Quatf};
+use levels::{
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
+    Vec3f,
+};
 
 fn level_with_uniform_flow(mut base: LevelSpec, flow: Vec3f) -> LevelSpec {
-    base.tunnel.flow = FlowFieldSpec::Uniform { flow, variance: 0.0 };
+    base.tunnel.flow = FlowFieldSpec::Uniform {
+        flow,
+        variance: 0.0,
+    };
     base
 }
 
-fn forward_vector(q: Quatf) -> Vec3f { q * Vec3f::new(1.0, 0.0, 0.0) }
+fn forward_vector(q: Quatf) -> Vec3f {
+    q * Vec3f::new(1.0, 0.0, 0.0)
+}
 
 fn pitch_angle_from_forward(fwd: Vec3f) -> f32 {
     // Signed pitch: + up, - down
@@ -27,13 +35,26 @@ fn forward_heavy_ballast_pitches_nose_down() {
         ballast_fill: vec![1.0, 0.0],
     };
 
-    let dt = 1.0 / 60.0; let mut t = 0.0f32;
-    let inputs = SubInputs { thrust: 0.0, yaw: 0.0, pump_fwd: 0.0, pump_aft: 0.0 };
-    for _ in 0..600 { step_submarine(&level, &spec, inputs, &mut state, dt, t); t += dt; }
+    let dt = 1.0 / 60.0;
+    let mut t = 0.0f32;
+    let inputs = SubInputs {
+        thrust: 0.0,
+        yaw: 0.0,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
+    for _ in 0..600 {
+        step_submarine(&level, &spec, inputs, &mut state, dt, t);
+        t += dt;
+    }
 
     let fwd = forward_vector(state.orientation);
     let pitch = pitch_angle_from_forward(fwd);
-    assert!(pitch < -0.05, "expected nose-down pitch (forward heavy); got {pitch} rad (fwd={:?})", fwd);
+    assert!(
+        pitch < -0.05,
+        "expected nose-down pitch (forward heavy); got {pitch} rad (fwd={:?})",
+        fwd
+    );
 }
 
 #[test]
@@ -50,11 +71,24 @@ fn aft_heavy_ballast_pitches_nose_up() {
         ballast_fill: vec![0.0, 1.0],
     };
 
-    let dt = 1.0 / 60.0; let mut t = 0.0f32;
-    let inputs = SubInputs { thrust: 0.0, yaw: 0.0, pump_fwd: 0.0, pump_aft: 0.0 };
-    for _ in 0..600 { step_submarine(&level, &spec, inputs, &mut state, dt, t); t += dt; }
+    let dt = 1.0 / 60.0;
+    let mut t = 0.0f32;
+    let inputs = SubInputs {
+        thrust: 0.0,
+        yaw: 0.0,
+        pump_fwd: 0.0,
+        pump_aft: 0.0,
+    };
+    for _ in 0..600 {
+        step_submarine(&level, &spec, inputs, &mut state, dt, t);
+        t += dt;
+    }
 
     let fwd = forward_vector(state.orientation);
     let pitch = pitch_angle_from_forward(fwd);
-    assert!(pitch > 0.05, "expected nose-up pitch (aft heavy); got {pitch} rad (fwd={:?})", fwd);
+    assert!(
+        pitch > 0.05,
+        "expected nose-up pitch (aft heavy); got {pitch} rad (fwd={:?})",
+        fwd
+    );
 }

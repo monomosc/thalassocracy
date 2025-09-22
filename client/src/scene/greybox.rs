@@ -1,20 +1,22 @@
 use bevy::color::{LinearRgba, Srgba};
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSamplerDescriptor};
-use bevy::math::primitives::{Cuboid, Sphere, Plane3d};
+use bevy::math::primitives::{Cuboid, Plane3d, Sphere};
+use bevy::math::{Affine2, Vec2};
 use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
-use bevy::math::{Affine2, Vec2};
 
-use levels::{builtins::greybox_level, LevelSpec, Vec3f};
 use levels::subspecs::small_skiff_spec;
+use levels::{builtins::greybox_level, LevelSpec, Vec3f};
 
-use super::setup::spawn_box;
-use super::submarine::{make_rudder_prism_mesh, AngularVelocity, Rudder, SubPhysics, Submarine, Velocity};
-use super::camera::{GameCamera, CamMode, FollowCam, FollowCamState, FreeFlyState};
+use super::camera::{CamMode, FollowCam, FollowCamState, FreeFlyState, GameCamera};
 use super::flow_field::{FlowField, Tunnel, TunnelBounds};
-use bevy::render::render_resource::TextureUsages;
+use super::light_bulb::{BlinkingLight, LightBulb};
 use super::proctex::ProcTexAssets;
-use super::light_bulb::{LightBulb, BlinkingLight};
+use super::setup::spawn_box;
+use super::submarine::{
+    make_rudder_prism_mesh, AngularVelocity, Rudder, SubPhysics, Submarine, Velocity,
+};
+use bevy::render::render_resource::{Face, TextureUsages};
 
 #[derive(Component)]
 pub struct StationRoom;
@@ -35,7 +37,9 @@ pub fn spawn_greybox(
     proc_tex: Option<Res<ProcTexAssets>>,
 ) {
     // Convert helpers
-    fn v(v: Vec3f) -> Vec3 { Vec3::new(v.x, v.y, v.z) }
+    fn v(v: Vec3f) -> Vec3 {
+        Vec3::new(v.x, v.y, v.z)
+    }
 
     // Reusable colors (StandardMaterial base_color: Color, emissive: LinearRgba)
     let wall_color: Color = Color::from(Srgba::new(0.35, 0.38, 0.42, 1.0));
@@ -129,7 +133,11 @@ pub fn spawn_greybox(
     }
 
     // Tunnel from +X wall outward (hollow shell: floor/ceiling/side walls)
-    let tunnel_size = Vec3::new(level.tunnel.size.x, level.tunnel.size.y, level.tunnel.size.z);
+    let tunnel_size = Vec3::new(
+        level.tunnel.size.x,
+        level.tunnel.size.y,
+        level.tunnel.size.z,
+    );
     let tunnel_pos = Vec3::new(level.tunnel.pos.x, level.tunnel.pos.y, level.tunnel.pos.z);
     let tunnel_entity = {
         // Parent holds the field and bounds. Children are the shell meshes.
@@ -151,20 +159,27 @@ pub fn spawn_greybox(
             .id();
 
         // Use the provided rock albedo; disable depth_map for now to avoid sampler type mismatch from 16-bit PNG
-        let tex_albedo: Handle<Image> = asset_server.load_with_settings("textures/rock_face_03_diff_4k.jpg", | settings: &mut ImageLoaderSettings| {
-            settings.sampler = bevy::image::ImageSampler::Descriptor(ImageSamplerDescriptor {
-                            address_mode_u: ImageAddressMode::Repeat,
-                            address_mode_v: ImageAddressMode::Repeat,
-                            address_mode_w: ImageAddressMode::Repeat,
-                            ..default()
-                        });
-        });
+        let tex_albedo: Handle<Image> = asset_server.load_with_settings(
+            "textures/rock_face_03_diff_4k.jpg",
+            |settings: &mut ImageLoaderSettings| {
+                settings.sampler = bevy::image::ImageSampler::Descriptor(ImageSamplerDescriptor {
+                    address_mode_u: ImageAddressMode::Repeat,
+                    address_mode_v: ImageAddressMode::Repeat,
+                    address_mode_w: ImageAddressMode::Repeat,
+                    ..default()
+                });
+            },
+        );
 
         // Helper to build a material with custom UV tiling and optional flips
         let mut make_mat = |repeats: Vec2, flip_x: bool, flip_y: bool| {
             let mut uv = Affine2::from_scale(repeats);
-            if flip_x { uv = StandardMaterial::FLIP_VERTICAL * uv; }
-            if flip_y { uv = StandardMaterial::FLIP_HORIZONTAL * uv; }
+            if flip_x {
+                uv = StandardMaterial::FLIP_VERTICAL * uv;
+            }
+            if flip_y {
+                uv = StandardMaterial::FLIP_HORIZONTAL * uv;
+            }
             materials.add(StandardMaterial {
                 base_color: Color::WHITE,
                 base_color_texture: Some(tex_albedo.clone()),
@@ -189,19 +204,20 @@ pub fn spawn_greybox(
         let half = tunnel_size * 0.5;
 
         // Helper to spawn a single textured plane as a child (avoids cuboid UV issues)
-        let mut spawn_plane = |size: Vec2, local: Vec3, rot: Quat, name: &str, mat: Handle<StandardMaterial>| {
-            let mesh = meshes.add(Plane3d::default().mesh().size(size.x, size.y));
-            let child = commands
-                .spawn((
-                    Mesh3d(mesh),
-                    MeshMaterial3d(mat),
-                    Transform::from_translation(local).with_rotation(rot),
-                    GlobalTransform::default(),
-                    Name::new(name.to_string()),
-                ))
-                .id();
-            commands.entity(child).insert(ChildOf(parent));
-        };
+        let mut spawn_plane =
+            |size: Vec2, local: Vec3, rot: Quat, name: &str, mat: Handle<StandardMaterial>| {
+                let mesh = meshes.add(Plane3d::default().mesh().size(size.x, size.y));
+                let child = commands
+                    .spawn((
+                        Mesh3d(mesh),
+                        MeshMaterial3d(mat),
+                        Transform::from_translation(local).with_rotation(rot),
+                        GlobalTransform::default(),
+                        Name::new(name.to_string()),
+                    ))
+                    .id();
+                commands.entity(child).insert(ChildOf(parent));
+            };
 
         // Floor (XZ plane, normal +Y)
         spawn_plane(
@@ -248,9 +264,17 @@ pub fn spawn_greybox(
                 let pos = Vec3::new(x, y, 0.0);
                 commands
                     .spawn((
-                        LightBulb { color: Color::srgb(1.0, 0.2, 0.2), strength: 0.0 },
+                        LightBulb {
+                            color: Color::srgb(1.0, 0.2, 0.2),
+                            strength: 0.0,
+                        },
                         // Brighter blink
-                        BlinkingLight { period: 1.0, on_fraction: 0.35, on_intensity: 3.8, off_intensity: 0.0 },
+                        BlinkingLight {
+                            period: 1.0,
+                            on_fraction: 0.35,
+                            on_intensity: 3.8,
+                            off_intensity: 0.0,
+                        },
                         Transform::from_translation(pos),
                         GlobalTransform::default(),
                         Name::new(format!("Tunnel Blink Bulb #{i}")),
@@ -263,8 +287,16 @@ pub fn spawn_greybox(
     };
 
     // Mining chamber as a hollow shell with an open entrance toward the tunnel (remove -X wall)
-    let chamber_size = Vec3::new(level.chamber.size.x, level.chamber.size.y, level.chamber.size.z);
-    let chamber_pos = Vec3::new(level.chamber.pos.x, level.chamber.pos.y, level.chamber.pos.z);
+    let chamber_size = Vec3::new(
+        level.chamber.size.x,
+        level.chamber.size.y,
+        level.chamber.size.z,
+    );
+    let chamber_pos = Vec3::new(
+        level.chamber.pos.x,
+        level.chamber.pos.y,
+        level.chamber.pos.z,
+    );
     {
         let parent = commands
             .spawn((
@@ -370,7 +402,13 @@ pub fn spawn_greybox(
                 SubPhysics(small_skiff_spec()),
                 crate::hud_instruments::HudInstrumentState::default(),
                 // Initialize persistent physics state; fill is set in simulate on first tick
-                super::submarine::SubStateComp(levels::SubState { position: levels::Vec3f::new(start.x, start.y, start.z), velocity: levels::Vec3f::ZERO, orientation: Quat::IDENTITY, ang_mom: levels::Vec3f::ZERO, ballast_fill: Vec::new() }),
+                super::submarine::SubStateComp(levels::SubState {
+                    position: levels::Vec3f::new(start.x, start.y, start.z),
+                    velocity: levels::Vec3f::ZERO,
+                    orientation: Quat::IDENTITY,
+                    ang_mom: levels::Vec3f::ZERO,
+                    ballast_fill: Vec::new(),
+                }),
                 Name::new("SubmarineRoot"),
             ))
             .id();
@@ -401,7 +439,7 @@ pub fn spawn_greybox(
         let rudder_mesh = meshes.add(rudder_mesh);
         let rudder_material = materials.add(StandardMaterial {
             base_color: Color::from(Srgba::new(0.9, 0.1, 0.1, 1.0)),
-            cull_mode: None,
+            cull_mode: Some(Face::Back),
             ..Default::default()
         });
         let rudder_local = Transform::from_translation(Vec3::new(-1.6, 0.0, 0.0));
@@ -419,56 +457,91 @@ pub fn spawn_greybox(
 
         // Forward floodlight as a child (spotlight)
         let light_pos = Vec3::new(0.01, 0.3, 0.0);
-        let light_transform = Transform::from_translation(light_pos)
-            .looking_at(light_pos + Vec3::X, Vec3::Y);
-        commands.spawn((
-            SpotLight {
-                color: Color::srgb(1.0, 1.0, 1.0),
-                intensity: 1_200_000_000.0, // brighter for longer throw
-                range: 600.0,
-                inner_angle: 0.04,
-                outer_angle: 0.08,
-                shadows_enabled: true,
-                ..Default::default()
-            },
-            light_transform,
-            Name::new("Sub Floodlight"),
-        )).insert(ChildOf(sub_root));
+        let light_transform =
+            Transform::from_translation(light_pos).looking_at(light_pos + Vec3::X, Vec3::Y);
+        commands
+            .spawn((
+                SpotLight {
+                    color: Color::srgb(1.0, 1.0, 1.0),
+                    intensity: 1_200_000_000.0, // brighter for longer throw
+                    range: 600.0,
+                    inner_angle: 0.04,
+                    outer_angle: 0.08,
+                    shadows_enabled: true,
+                    ..Default::default()
+                },
+                light_transform,
+                Name::new("Sub Floodlight"),
+            ))
+            .insert(ChildOf(sub_root));
 
         let tail_point_light_pos = Vec3::new(-1.1, 0.27, 0.0);
-        let tail_root = commands.spawn((
-            Transform::from_translation(tail_point_light_pos),
-            Name::from("Sub Tail-light Root"),
-            ChildOf(sub_root)
-        )).id();
+        let tail_root = commands
+            .spawn((
+                Transform::from_translation(tail_point_light_pos),
+                Name::from("Sub Tail-light Root"),
+                ChildOf(sub_root),
+            ))
+            .id();
         // Replace tail-light with blinking LightBulb
         let _tail_bulb = commands.spawn((
-            LightBulb { color: Color::srgb(1.0, 0.1, 0.1), strength: 0.0 },
-            BlinkingLight { period: 0.9, on_fraction: 0.4, on_intensity: 2.8, off_intensity: 0.0 },
+            LightBulb {
+                color: Color::srgb(1.0, 0.1, 0.1),
+                strength: 0.0,
+            },
+            BlinkingLight {
+                period: 0.9,
+                on_fraction: 0.4,
+                on_intensity: 2.8,
+                off_intensity: 0.0,
+            },
             super::light_bulb::LightShadowOverride(false),
             Transform::IDENTITY,
             GlobalTransform::default(),
             Name::from("Sub Tail LightBulb"),
-            ChildOf(tail_root)
+            ChildOf(tail_root),
         ));
 
         // Unified game camera (single camera). Initialize near the bow; mode = FirstPerson
         let fp_world = start + Vec3::new(1.0, 0.0, 0.0);
         let fp_t = Transform::from_translation(fp_world).looking_at(fp_world + Vec3::X, Vec3::Y);
         commands.spawn((
-            Camera3d { depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING).into(), ..Default::default() },
-            Camera { hdr: true, is_active: true, ..Default::default() },
+            Camera3d {
+                depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
+                    | TextureUsages::TEXTURE_BINDING)
+                    .into(),
+                ..Default::default()
+            },
+            Camera {
+                hdr: true,
+                is_active: true,
+                ..Default::default()
+            },
             bevy::core_pipeline::bloom::Bloom::OLD_SCHOOL,
             bevy::core_pipeline::tonemapping::Tonemapping::TonyMcMapface,
-            bevy::pbr::DistanceFog { color: Color::srgb(0.04, 0.11, 0.12), falloff: bevy::pbr::FogFalloff::Exponential { density: 0.10 }, ..Default::default() },
+            bevy::pbr::DistanceFog {
+                color: Color::srgb(0.04, 0.11, 0.12),
+                falloff: bevy::pbr::FogFalloff::Exponential { density: 0.10 },
+                ..Default::default()
+            },
             Msaa::Off,
             fp_t,
             GlobalTransform::default(),
             GameCamera,
             CamMode::FirstPerson,
-            FollowCam { distance: 8.0, height: 2.0, stiffness: 8.0 },
-            FollowCamState { last_dir: Vec3::NEG_X },
-            FreeFlyState { yaw: 0.0, pitch: 0.0, speed: 8.0 },
+            FollowCam {
+                distance: 8.0,
+                height: 2.0,
+                stiffness: 8.0,
+            },
+            FollowCamState {
+                last_dir: Vec3::NEG_X,
+            },
+            FreeFlyState {
+                yaw: 0.0,
+                pitch: 0.0,
+                speed: 8.0,
+            },
             Name::new("Game Camera"),
         ));
 

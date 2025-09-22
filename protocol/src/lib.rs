@@ -112,10 +112,14 @@ pub struct DockAck {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PauseRequest { pub paused: bool }
+pub struct PauseRequest {
+    pub paused: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PauseState { pub paused: bool }
+pub struct PauseState {
+    pub paused: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DisconnectReason {

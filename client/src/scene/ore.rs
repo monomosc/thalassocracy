@@ -1,12 +1,15 @@
-use bevy::prelude::*;
 use bevy::math::primitives::{Cuboid, Sphere};
+use bevy::prelude::*;
 use levels::builtins::greybox_level;
 
 #[derive(Component)]
 pub struct OreNode;
 
 #[derive(Component)]
-struct OrePulse { phase: f32, amp: f32 }
+struct OrePulse {
+    phase: f32,
+    amp: f32,
+}
 
 pub struct OrePlugin;
 
@@ -32,7 +35,10 @@ fn spawn_demo_ore(
             GlobalTransform::default(),
             Visibility::default(),
             OreNode,
-            OrePulse { phase: 0.0, amp: 1.0 },
+            OrePulse {
+                phase: 0.0,
+                amp: 1.0,
+            },
             Name::new("Ore Node"),
         ))
         .id();
@@ -58,7 +64,8 @@ fn spawn_demo_ore(
 
     // Crystals: stretched cuboids in radial layout
     let shard_mesh = meshes.add(Mesh::from(Cuboid::new(0.15, 0.15, 1.2)));
-    for i in 0..6 { // 6 shards
+    for i in 0..6 {
+        // 6 shards
         let t = i as f32 * std::f32::consts::TAU / 6.0;
         let yaw = Quat::from_rotation_y(t);
         let pitch = Quat::from_rotation_x((t * 1.7).sin() * 0.3);
@@ -86,8 +93,12 @@ fn spawn_demo_ore(
     // Light bulb child: couples emissive and spotlight via strength
     let bulb = commands
         .spawn((
-            super::light_bulb::LightBulb { color: Color::srgb(1.0, 0.95, 0.8), strength: 1.6 },
-            Transform::from_translation(Vec3::new(0.0, 0.5, 0.0)).looking_at(Vec3::new(0.0, 0.5, 1.0), Vec3::Y),
+            super::light_bulb::LightBulb {
+                color: Color::srgb(1.0, 0.95, 0.8),
+                strength: 1.6,
+            },
+            Transform::from_translation(Vec3::new(0.0, 0.5, 0.0))
+                .looking_at(Vec3::new(0.0, 0.5, 1.0), Vec3::Y),
             GlobalTransform::default(),
             Name::new("Ore LightBulb"),
             ChildOf(root),

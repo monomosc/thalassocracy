@@ -10,7 +10,9 @@ use crate::scene::submarine::ClientPhysicsTiming;
 use crate::scene::submarine::{NetControlled, ServerCorrection, Submarine, Velocity};
 
 use crate::Args;
-use protocol::{ClientToServer, ClientHello, ServerToClient, StateDelta, PROTOCOL_VERSION, NETCODE_PROTOCOL_ID};
+use protocol::{
+    ClientHello, ClientToServer, ServerToClient, StateDelta, NETCODE_PROTOCOL_ID, PROTOCOL_VERSION,
+};
 
 #[derive(Resource, Default)]
 pub struct HelloSent(pub bool);
@@ -31,7 +33,10 @@ pub struct LatestStateDelta(pub Option<StateDelta>);
 pub struct NetSet;
 
 #[derive(Resource, Default, Debug, Clone, Copy)]
-pub struct TimeSync { pub offset_ms: f32, pub last_server_ms: u64 }
+pub struct TimeSync {
+    pub offset_ms: f32,
+    pub last_server_ms: u64,
+}
 
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct FilteredServerState {
@@ -43,7 +48,12 @@ pub struct FilteredServerState {
 
 impl Default for FilteredServerState {
     fn default() -> Self {
-        Self { initialized: false, pos: Vec3::ZERO, rot: Quat::IDENTITY, vel: Vec3::ZERO }
+        Self {
+            initialized: false,
+            pos: Vec3::ZERO,
+            rot: Quat::IDENTITY,
+            vel: Vec3::ZERO,
+        }
     }
 }
 
@@ -56,14 +66,26 @@ pub fn client_connect(mut commands: Commands, args: Res<Args>) {
     let uuid = uuid::Uuid::new_v4();
     let bytes = uuid.as_bytes();
     let client_id = u64::from_le_bytes(bytes[0..8].try_into().expect("uuid slice to u64"));
-    let auth = ClientAuthentication::Unsecure { protocol_id: NETCODE_PROTOCOL_ID, client_id, server_addr, user_data: None };
+    let auth = ClientAuthentication::Unsecure {
+        protocol_id: NETCODE_PROTOCOL_ID,
+        client_id,
+        server_addr,
+        user_data: None,
+    };
     let socket = UdpSocket::bind(("0.0.0.0", 0)).expect("failed to bind UDP socket");
-    let transport = NetcodeClientTransport::new(SystemTime::now().duration_since(UNIX_EPOCH).unwrap(), auth, socket)
-        .expect("failed to create client transport");
+    let transport = NetcodeClientTransport::new(
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
+        auth,
+        socket,
+    )
+    .expect("failed to create client transport");
 
     commands.insert_resource(client);
     commands.insert_resource(transport);
-    commands.insert_resource(ConnectStart { at: Instant::now(), timeout: Duration::from_secs(args.connect_timeout_secs) });
+    commands.insert_resource(ConnectStart {
+        at: Instant::now(),
+        timeout: Duration::from_secs(args.connect_timeout_secs),
+    });
     commands.init_resource::<TimeSync>();
     commands.init_resource::<FilteredServerState>();
 
@@ -81,11 +103,16 @@ pub fn pump_network(
     mut net_stats: ResMut<NetClientStats>,
     mut client_tick: ResMut<ClientPhysicsTiming>,
 ) {
-    let Some(mut client) = client else { return; };
+    let Some(mut client) = client else {
+        return;
+    };
 
     // Send Hello once after connection established
     if client.is_connected() && !hello_sent.0 {
-        let hello = ClientToServer::Hello(ClientHello { protocol: PROTOCOL_VERSION, display_name: args.name.clone() });
+        let hello = ClientToServer::Hello(ClientHello {
+            protocol: PROTOCOL_VERSION,
+            display_name: args.name.clone(),
+        });
         if let Ok(bytes) = protocol::encode(&hello) {
             client.send_message(DefaultChannel::ReliableOrdered, bytes);
         }
@@ -101,7 +128,11 @@ pub fn pump_network(
                 // Configure client fixed-step dt from server tick rate
                 let hz = ack.tick_hz.max(1) as f32;
                 client_tick.dt = 1.0 / hz;
-                info!(tick_hz = ack.tick_hz, dt = client_tick.dt, "Configured client fixed-step dt");
+                info!(
+                    tick_hz = ack.tick_hz,
+                    dt = client_tick.dt,
+                    "Configured client fixed-step dt"
+                );
             }
             Ok(ServerToClient::StateDelta(delta)) => {
                 // For compatibility in case server still sends reliable.
@@ -112,10 +143,12 @@ pub fn pump_network(
                     if let Some(prev) = net_stats.last_state_instant {
                         let dt_ms = now.saturating_duration_since(prev).as_secs_f32() * 1000.0;
                         let alpha = 0.2_f32;
-                        net_stats.inter_arrival_ewma_ms = if net_stats.inter_arrival_ewma_ms == 0.0 {
+                        net_stats.inter_arrival_ewma_ms = if net_stats.inter_arrival_ewma_ms == 0.0
+                        {
                             dt_ms
                         } else {
-                            net_stats.inter_arrival_ewma_ms + alpha * (dt_ms - net_stats.inter_arrival_ewma_ms)
+                            net_stats.inter_arrival_ewma_ms
+                                + alpha * (dt_ms - net_stats.inter_arrival_ewma_ms)
                         };
                     }
                     net_stats.last_state_instant = Some(now);
@@ -147,10 +180,12 @@ pub fn pump_network(
                     if let Some(prev) = net_stats.last_state_instant {
                         let dt_ms = now.saturating_duration_since(prev).as_secs_f32() * 1000.0;
                         let alpha = 0.2_f32;
-                        net_stats.inter_arrival_ewma_ms = if net_stats.inter_arrival_ewma_ms == 0.0 {
+                        net_stats.inter_arrival_ewma_ms = if net_stats.inter_arrival_ewma_ms == 0.0
+                        {
                             dt_ms
                         } else {
-                            net_stats.inter_arrival_ewma_ms + alpha * (dt_ms - net_stats.inter_arrival_ewma_ms)
+                            net_stats.inter_arrival_ewma_ms
+                                + alpha * (dt_ms - net_stats.inter_arrival_ewma_ms)
                         };
                     }
                     net_stats.last_state_instant = Some(now);
@@ -176,7 +211,15 @@ pub fn apply_state_to_sub(
     my_id: Res<MyPlayerId>,
     latest: Res<LatestStateDelta>,
     mut commands: Commands,
-    mut q_sub: Query<(Entity, &mut Transform, &mut Velocity, Option<&mut ServerCorrection>), With<Submarine>>,
+    mut q_sub: Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Velocity,
+            Option<&mut ServerCorrection>,
+        ),
+        With<Submarine>,
+    >,
     mut net_stats: ResMut<NetClientStats>,
     controls: Option<Res<crate::hud_controls::ThrustInput>>,
     time: Res<Time>,
@@ -184,9 +227,15 @@ pub fn apply_state_to_sub(
     connect: Option<Res<ConnectStart>>,
     mut tsync: ResMut<TimeSync>,
 ) {
-    let Some(my_id) = my_id.0 else { return; };
-    let Some(delta) = latest.0.as_ref() else { return; };
-    let Some(me) = delta.players.iter().find(|p| p.id == my_id) else { return; };
+    let Some(my_id) = my_id.0 else {
+        return;
+    };
+    let Some(delta) = latest.0.as_ref() else {
+        return;
+    };
+    let Some(me) = delta.players.iter().find(|p| p.id == my_id) else {
+        return;
+    };
     if let Ok((entity, mut t, mut v, corr_opt)) = q_sub.single_mut() {
         // Update time sync from delta.server_ms vs local monotonic
         if let Some(connect) = connect {
@@ -260,7 +309,6 @@ pub fn apply_state_to_sub(
             commands.entity(entity).remove::<ServerCorrection>();
             // Record the magnitude of snap for the desync indicator
             net_stats.last_snap_magnitude_m = raw_pos_err;
-
         } else if tiny {
             // Avoid micro-corrections. Drop any existing correction and gently align velocity.
             if corr_opt.is_some() {
@@ -273,7 +321,9 @@ pub fn apply_state_to_sub(
             corr.target_rot = target_rot;
             corr.target_vel = target_vel;
             // If the existing correction is near its end, keep some time to finish the new target.
-            if corr.elapsed > 0.2 { corr.elapsed = 0.2; }
+            if corr.elapsed > 0.2 {
+                corr.elapsed = 0.2;
+            }
         } else if need_corr {
             commands.entity(entity).insert(ServerCorrection {
                 target_pos,
@@ -298,7 +348,9 @@ pub fn crash_on_disconnect(transport: Option<Res<NetcodeClientTransport>>) {
 }
 
 pub fn enforce_connect_timeout(client: Option<Res<RenetClient>>, start: Option<Res<ConnectStart>>) {
-    let (Some(client), Some(start)) = (client, start) else { return; };
+    let (Some(client), Some(start)) = (client, start) else {
+        return;
+    };
     if !client.is_connected() && start.at.elapsed() >= start.timeout {
         eprintln!(
             "Connection timeout after {}s without establishing a session. Exiting.",

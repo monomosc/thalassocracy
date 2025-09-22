@@ -52,7 +52,10 @@ pub struct ClientPhysicsTiming {
 impl Default for ClientPhysicsTiming {
     fn default() -> Self {
         // Match server default tick_hz (30 Hz) unless overridden later.
-        Self { acc: 0.0, dt: 1.0 / 120.0 }
+        Self {
+            acc: 0.0,
+            dt: 1.0 / 120.0,
+        }
     }
 }
 
@@ -111,7 +114,9 @@ pub fn simulate_submarine(
         SubInputs::default()
     };
 
-    for (mut transform, mut vel, mut state_comp, spec, _correction, mut ang_vel_comp, _net) in &mut q_sub {
+    for (mut transform, mut vel, mut state_comp, spec, _correction, mut ang_vel_comp, _net) in
+        &mut q_sub
+    {
         // Map visual mesh (+X forward) to physics body (+Z forward): yaw +90°
         let body_from_mesh = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
         let mesh_from_body = body_from_mesh.conjugate();
@@ -129,7 +134,11 @@ pub fn simulate_submarine(
                     let ixx = spec.0.ixx.max(0.0);
                     let iyy = spec.0.iyy.max(0.0);
                     let izz = spec.0.izz.max(0.0);
-                    levels::Vec3f::new(ang_vel_comp.x * ixx, ang_vel_comp.y * iyy, ang_vel_comp.z * izz)
+                    levels::Vec3f::new(
+                        ang_vel_comp.x * ixx,
+                        ang_vel_comp.y * iyy,
+                        ang_vel_comp.z * izz,
+                    )
                 },
                 ballast_fill: vec![0.5; spec.0.ballast_tanks.len()],
             };
@@ -140,7 +149,15 @@ pub fn simulate_submarine(
         for i in 0..steps {
             let mut dbg = SubStepDebug::default();
             let t_sub = t0 + (i + 1) as f32 * step_dt;
-            step_submarine_dbg(&level, &spec.0, inputs, &mut state, step_dt, t_sub, Some(&mut dbg));
+            step_submarine_dbg(
+                &level,
+                &spec.0,
+                inputs,
+                &mut state,
+                step_dt,
+                t_sub,
+                Some(&mut dbg),
+            );
             telemetry.0 = dbg; // store last step's diagnostics
         }
         // Persist state back to component
@@ -148,12 +165,24 @@ pub fn simulate_submarine(
         transform.translation = Vec3::new(state.position.x, state.position.y, state.position.z);
         // Convert physics (body) orientation back to visual (mesh) orientation
         transform.rotation = state.orientation * mesh_from_body;
-        
+
         **vel = Vec3::new(state.velocity.x, state.velocity.y, state.velocity.z);
         // Update client-side rates from body angular momentum
-        let wx = if spec.0.ixx > 0.0 { state.ang_mom.x / spec.0.ixx } else { 0.0 };
-        let wy = if spec.0.iyy > 0.0 { state.ang_mom.y / spec.0.iyy } else { 0.0 };
-        let wz = if spec.0.izz > 0.0 { state.ang_mom.z / spec.0.izz } else { 0.0 };
+        let wx = if spec.0.ixx > 0.0 {
+            state.ang_mom.x / spec.0.ixx
+        } else {
+            0.0
+        };
+        let wy = if spec.0.iyy > 0.0 {
+            state.ang_mom.y / spec.0.iyy
+        } else {
+            0.0
+        };
+        let wz = if spec.0.izz > 0.0 {
+            state.ang_mom.z / spec.0.izz
+        } else {
+            0.0
+        };
         **ang_vel_comp = Vec3::new(wx, wy, wz);
     }
 }
@@ -161,10 +190,7 @@ pub fn simulate_submarine(
 pub fn apply_server_corrections(
     time: Res<Time>,
     mut commands: Commands,
-    mut q: Query<
-        (Entity, &mut Transform, &mut Velocity, &mut ServerCorrection),
-        With<Submarine>,
-    >,
+    mut q: Query<(Entity, &mut Transform, &mut Velocity, &mut ServerCorrection), With<Submarine>>,
     controls: Option<Res<crate::hud_controls::ThrustInput>>,
 ) {
     let dt = time.delta_secs();
@@ -217,7 +243,11 @@ pub fn animate_rudder(
     };
     // Visual convention: positive input = right rudder. Mesh is built so that
     // positive rotation around +Y deflects the trailing edge starboard.
-    let yaw = controls.as_ref().map(|c| c.yaw).unwrap_or(0.0).clamp(-1.0, 1.0);
+    let yaw = controls
+        .as_ref()
+        .map(|c| c.yaw)
+        .unwrap_or(0.0)
+        .clamp(-1.0, 1.0);
     let max_angle = 0.6_f32; // radians (~34 degrees)
     let angle = yaw * max_angle;
     rudder_t.rotation = Quat::from_rotation_y(angle);
@@ -252,14 +282,25 @@ pub fn make_rudder_prism_mesh(length: f32, height: f32, thickness: f32) -> Mesh 
     };
 
     // Front face (z = +zf), normal +Z
-    add_tri(a + Vec3::Z * zf, b + Vec3::Z * zf, c + Vec3::Z * zf, Vec3::Z);
+    add_tri(
+        a + Vec3::Z * zf,
+        b + Vec3::Z * zf,
+        c + Vec3::Z * zf,
+        Vec3::Z,
+    );
     // Back face (z = -zf), normal -Z (note reversed winding)
-    add_tri(b + Vec3::Z * zb, a + Vec3::Z * zb, c + Vec3::Z * zb, -Vec3::Z);
+    add_tri(
+        b + Vec3::Z * zb,
+        a + Vec3::Z * zb,
+        c + Vec3::Z * zb,
+        -Vec3::Z,
+    );
 
     // Side faces for each edge (two triangles forming a quad)
-    let edges = [(a, b), // edge ab
-                 (b, c), // edge bc
-                 (c, a) // edge ca
+    let edges = [
+        (a, b), // edge ab
+        (b, c), // edge bc
+        (c, a), // edge ca
     ];
     for (p0, p1) in edges {
         let v0f = p0 + Vec3::Z * zf;

@@ -51,57 +51,79 @@ pub(super) fn spawn_flow_instr(mut commands: Commands) {
             // Speed text above ring
             root.spawn((
                 Text::new(""),
-                TextFont { font_size: 14.0,  ..Default::default() },
+                TextFont {
+                    font_size: 14.0,
+                    ..Default::default()
+                },
                 TextColor(Color::WHITE),
                 FlowInstrSpeedText,
                 Name::new("Flow Instrument Speed Text"),
             ));
             // Ring
-            root
-                .spawn((
+            root.spawn((
+                Node {
+                    width: Val::Px(INSTR_SIZE),
+                    height: Val::Px(INSTR_SIZE),
+                    border: UiRect::all(Val::Px(RING_THICKNESS)),
+                    ..Default::default()
+                },
+                BackgroundColor(Color::NONE),
+                BorderColor(Color::srgba(1.0, 1.0, 1.0, 0.6)),
+                // Make the ring circular
+                BorderRadius::all(Val::Px(INSTR_SIZE * 0.5)),
+                FlowInstrRing,
+                Name::new("Flow Instrument Ring"),
+            ))
+            .with_children(|ring| {
+                // Dot (absolute within ring)
+                ring.spawn((
                     Node {
-                        width: Val::Px(INSTR_SIZE),
-                        height: Val::Px(INSTR_SIZE),
-                        border: UiRect::all(Val::Px(RING_THICKNESS)),
+                        position_type: PositionType::Absolute,
+                        width: Val::Px(DOT_SIZE),
+                        height: Val::Px(DOT_SIZE),
                         ..Default::default()
                     },
-                    BackgroundColor(Color::NONE),
-                    BorderColor(Color::srgba(1.0, 1.0, 1.0, 0.6)),
-                    // Make the ring circular
-                    BorderRadius::all(Val::Px(INSTR_SIZE * 0.5)),
-                    FlowInstrRing,
-                    Name::new("Flow Instrument Ring"),
-                ))
-                .with_children(|ring| {
-                    // Dot (absolute within ring)
-                    ring.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            width: Val::Px(DOT_SIZE),
-                            height: Val::Px(DOT_SIZE),
-                            ..Default::default()
-                        },
-                        BackgroundColor(Color::WHITE),
-                        // Make the dot circular
-                        BorderRadius::all(Val::Px(DOT_SIZE * 0.5)),
-                        FlowInstrDot,
-                        Name::new("Flow Instrument Dot"),
-                    ));
-                });
+                    BackgroundColor(Color::WHITE),
+                    // Make the dot circular
+                    BorderRadius::all(Val::Px(DOT_SIZE * 0.5)),
+                    FlowInstrDot,
+                    Name::new("Flow Instrument Dot"),
+                ));
+            });
         });
 }
 
 pub(super) fn update_hud_instr_state(
     time: Res<Time>,
-    mut q: Query<(&crate::scene::submarine::SubStateComp, &mut HudInstrumentState), With<crate::scene::submarine::Submarine>>,
+    mut q: Query<
+        (
+            &crate::scene::submarine::SubStateComp,
+            &mut HudInstrumentState,
+        ),
+        With<crate::scene::submarine::Submarine>,
+    >,
 ) {
-    let Ok((state_comp, mut hud)) = q.single_mut() else { return; };
+    let Ok((state_comp, mut hud)) = q.single_mut() else {
+        return;
+    };
 
     let s = &state_comp.0;
     // Sample flow at sub position
     let level = greybox_level();
-    let (flow, _var) = sample_flow_at(&level, Vec3f { x: s.position.x, y: s.position.y, z: s.position.z }, time.elapsed_secs());
-    let rel = Vec3::new(s.velocity.x - flow.x, s.velocity.y - flow.y, s.velocity.z - flow.z);
+    let (flow, _var) = sample_flow_at(
+        &level,
+        Vec3f {
+            x: s.position.x,
+            y: s.position.y,
+            z: s.position.z,
+        },
+        time.elapsed_secs(),
+    );
+    let rel = Vec3::new(
+        s.velocity.x - flow.x,
+        s.velocity.y - flow.y,
+        s.velocity.z - flow.z,
+    );
     // Convert world->body using body's orientation
     let rel_body = s.orientation.conjugate() * rel;
     // Longitudinal relative speed (+Z forward)
@@ -111,9 +133,13 @@ pub(super) fn update_hud_instr_state(
     // Project to instrument plane using gnomonic-like mapping to keep center stable
     let denom = (n.z).abs().max(1e-3);
     let mut dot = Vec2::new(n.x / denom, n.y / denom);
-    if !dot.x.is_finite() || !dot.y.is_finite() { dot = Vec2::ZERO; }
+    if !dot.x.is_finite() || !dot.y.is_finite() {
+        dot = Vec2::ZERO;
+    }
     let mag = dot.length();
-    if mag > 1.0 { dot /= mag; }
+    if mag > 1.0 {
+        dot /= mag;
+    }
 
     // Smooth into HUD state
     hud.pos = hud.pos.lerp(dot, SMOOTH_ALPHA);
@@ -129,9 +155,15 @@ pub(super) fn draw_flow_instr(
     mut q_speed: Query<&mut Text, With<FlowInstrSpeedText>>,
     q_spec: Query<&crate::scene::submarine::SubPhysics, With<crate::scene::submarine::Submarine>>,
 ) {
-    let Ok(_ring_xform) = q_root.single_mut() else { return; };
-    let Ok((mut dot_node, mut dot_color)) = q_dot.single_mut() else { return; };
-    let Ok(state) = q_hud.single() else { return; };
+    let Ok(_ring_xform) = q_root.single_mut() else {
+        return;
+    };
+    let Ok((mut dot_node, mut dot_color)) = q_dot.single_mut() else {
+        return;
+    };
+    let Ok(state) = q_hud.single() else {
+        return;
+    };
 
     // Compute pixel position inside the ring node
     let r = INSTR_SIZE * 0.5 - DOT_SIZE * 0.5 - RING_THICKNESS; // inner radius minus dot radius and border
@@ -173,7 +205,11 @@ pub(super) fn draw_flow_instr(
     let color = if state.surge < 0.0 {
         // Back-coming flow: magenta at strong backflow, red as it approaches zero
         // Interpolate red (1,0,0) → magenta (1,0,1) using u_green as normalization
-        let k = if u_green > 1e-6 { (mag / u_green).clamp(0.0, 1.0) } else { 0.0 };
+        let k = if u_green > 1e-6 {
+            (mag / u_green).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
         Color::srgba(1.0, 0.0, k, 1.0)
     } else {
         // Front-coming flow
@@ -205,7 +241,7 @@ pub(super) fn draw_flow_instr(
             let u_blue_full = (2.5_f32) * u_term;
             let denom = (u_blue_full - u_blue_start).max(1e-3);
             let k = ((mag - u_blue_start) / denom).clamp(0.0, 1.0); // 0 at start, 1 at full
-            // green (0,1,0) → blue (0,0,1)
+                                                                    // green (0,1,0) → blue (0,0,1)
             Color::srgba(0.0, 1.0 - k, k, 1.0)
         }
     };

@@ -1,5 +1,5 @@
+use super::util::{vadd, vscale, vsub};
 use crate::{FlowFieldSpec, LevelSpec, Vec3f};
-use super::util::{vadd, vsub, vscale};
 
 /// Sample the flow field and variance at a world position.
 /// Currently only the tunnel contributes; extend later for multiple fields.
@@ -24,7 +24,10 @@ pub fn sample_flow_at(level: &LevelSpec, pos: Vec3f, time: f32) -> (Vec3f, f32) 
         && pos.z <= max.z
     {
         match level.tunnel.flow {
-            FlowFieldSpec::Uniform { flow: f, variance: var } => {
+            FlowFieldSpec::Uniform {
+                flow: f,
+                variance: var,
+            } => {
                 flow = vadd(flow, f);
                 variance += var;
                 count += 1.0;
@@ -37,7 +40,11 @@ pub fn sample_flow_at(level: &LevelSpec, pos: Vec3f, time: f32) -> (Vec3f, f32) 
         let axis_len2 = t.axis.x * t.axis.x + t.axis.y * t.axis.y + t.axis.z * t.axis.z;
         if axis_len2 > 1e-8 {
             let axis_len = axis_len2.sqrt();
-            let n = Vec3f::new(t.axis.x / axis_len, t.axis.y / axis_len, t.axis.z / axis_len);
+            let n = Vec3f::new(
+                t.axis.x / axis_len,
+                t.axis.y / axis_len,
+                t.axis.z / axis_len,
+            );
             let d = vsub(pos, t.center);
             let h = d.x * n.x + d.y * n.y + d.z * n.z; // signed height from ring plane
             let p = Vec3f::new(d.x - n.x * h, d.y - n.y * h, d.z - n.z * h);
@@ -45,7 +52,10 @@ pub fn sample_flow_at(level: &LevelSpec, pos: Vec3f, time: f32) -> (Vec3f, f32) 
             let tube = ((p_len - t.major_radius).abs().powi(2) + h * h).sqrt();
             if tube <= t.minor_radius {
                 match t.flow {
-                    FlowFieldSpec::Uniform { flow: f, variance: var } => {
+                    FlowFieldSpec::Uniform {
+                        flow: f,
+                        variance: var,
+                    } => {
                         flow = vadd(flow, f);
                         variance += var;
                         count += 1.0;
@@ -75,7 +85,10 @@ mod tests {
         let center = level.tunnel.pos;
         let (flow, var) = sample_flow_at(&level, center, 0.0);
         match level.tunnel.flow {
-            FlowFieldSpec::Uniform { flow: f, variance: v } => {
+            FlowFieldSpec::Uniform {
+                flow: f,
+                variance: v,
+            } => {
                 assert!((flow.x - f.x).abs() < 1e-6);
                 assert!((flow.y - f.y).abs() < 1e-6);
                 assert!((flow.z - f.z).abs() < 1e-6);

@@ -1,16 +1,21 @@
 use anyhow::Result;
-use bevy::prelude::*;
 use bevy::asset::AssetPlugin;
-use bevy::render::RenderPlugin;
-use bevy::render::settings::{RenderCreation, WgpuSettings, InstanceFlags, Backends, PowerPreference};
-use bevy_renet::{netcode::NetcodeClientPlugin, RenetClientPlugin};
-use clap::Parser;
 use bevy::pbr::wireframe::WireframePlugin;
+use bevy::prelude::*;
+use bevy::render::settings::{
+    Backends, InstanceFlags, PowerPreference, RenderCreation, WgpuSettings,
+};
+use bevy::render::RenderPlugin;
 #[cfg(feature = "windowing")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_renet::{netcode::NetcodeClientPlugin, RenetClientPlugin};
+use clap::Parser;
 
 mod net;
-use net::{client_connect, crash_on_disconnect, enforce_connect_timeout, HelloSent, MyPlayerId, LatestStateDelta};
+use net::{
+    client_connect, crash_on_disconnect, enforce_connect_timeout, HelloSent, LatestStateDelta,
+    MyPlayerId,
+};
 mod labels;
 use labels::LabelPlugin;
 mod debug_vis;
@@ -24,11 +29,11 @@ mod hud_controls;
 use hud_controls::HudControlsPlugin;
 mod hud_instruments;
 use hud_instruments::HudInstrumentsPlugin;
-mod sim_pause;
 mod render_settings;
+mod sim_pause;
 
 #[derive(Parser, Debug, Resource)]
-#[command(name = "thalassocracy-client")] 
+#[command(name = "thalassocracy-client")]
 #[command(about = "Client for Thalassocracy prototype", long_about = None)]
 struct Args {
     /// Server address (ip:port)
@@ -75,7 +80,7 @@ fn main() -> Result<()> {
                         ..Default::default()
                     }),
                     ..Default::default()
-                })
+                }),
         );
         #[cfg(feature = "windowing")]
         {
@@ -103,7 +108,10 @@ fn main() -> Result<()> {
         .add_plugins(ScenePlugin)
         .add_plugins(LabelPlugin)
         .add_systems(Startup, client_connect)
-        .add_systems(Update, (net::pump_network, net::apply_state_to_sub).in_set(net::NetSet))
+        .add_systems(
+            Update,
+            (net::pump_network, net::apply_state_to_sub).in_set(net::NetSet),
+        )
         .add_systems(Update, (crash_on_disconnect, enforce_connect_timeout));
 
     app.run();

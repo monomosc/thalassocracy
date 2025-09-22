@@ -79,10 +79,19 @@ impl Plugin for DesyncMetricsPlugin {
 
 /// Read current ServerCorrection (if any) and produce raw errors.
 fn sample_reconcile_errors(
-    q_sub: Query<(&Transform, &crate::scene::submarine::Velocity, Option<&crate::scene::submarine::ServerCorrection>), With<crate::scene::submarine::Submarine>>,
+    q_sub: Query<
+        (
+            &Transform,
+            &crate::scene::submarine::Velocity,
+            Option<&crate::scene::submarine::ServerCorrection>,
+        ),
+        With<crate::scene::submarine::Submarine>,
+    >,
     mut errs: ResMut<ReconcileErrors>,
 ) {
-    let Ok((t, v, corr)) = q_sub.single() else { return; };
+    let Ok((t, v, corr)) = q_sub.single() else {
+        return;
+    };
     if let Some(c) = corr {
         let pos_err = t.translation.distance(c.target_pos);
         // Use yaw-only difference for orientation error to avoid pitch/roll inflating error during turns.
@@ -92,8 +101,12 @@ fn sample_reconcile_errors(
         };
         let mut dyaw = yaw(t.rotation) - yaw(c.target_rot);
         // wrap to [-pi, pi]
-        if dyaw > std::f32::consts::PI { dyaw -= std::f32::consts::TAU; }
-        if dyaw < -std::f32::consts::PI { dyaw += std::f32::consts::TAU; }
+        if dyaw > std::f32::consts::PI {
+            dyaw -= std::f32::consts::TAU;
+        }
+        if dyaw < -std::f32::consts::PI {
+            dyaw += std::f32::consts::TAU;
+        }
         let orientation_err = dyaw.abs().to_degrees();
         let vel_err = ((**v) - c.target_vel).length();
         errs.pos_err_m = pos_err;

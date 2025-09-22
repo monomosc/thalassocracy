@@ -1,4 +1,7 @@
-use crate::{LevelSpec, RoomSpec, TunnelSpec, ChamberSpec, TorusTunnelSpec, TorusExitSpec, FlowFieldSpec, Vec3f};
+use crate::{
+    ChamberSpec, FlowFieldSpec, LevelSpec, RoomSpec, TorusExitSpec, TorusTunnelSpec, TunnelSpec,
+    Vec3f,
+};
 
 // Mirrors the current greybox layout used in the prototype.
 pub fn greybox_level() -> LevelSpec {
@@ -29,7 +32,10 @@ pub fn greybox_level() -> LevelSpec {
             size: Vec3f::new(tunnel_len, tunnel_h, tunnel_w),
             pos: tunnel_pos,
             shell_thickness: wall_thick,
-            flow: FlowFieldSpec::Uniform { flow: Vec3f::new(1.5, 0.0, 0.0), variance: 0.2 },
+            flow: FlowFieldSpec::Uniform {
+                flow: Vec3f::new(1.5, 0.0, 0.0),
+                variance: 0.2,
+            },
         },
         chamber: ChamberSpec {
             size: chamber_size,
@@ -67,13 +73,21 @@ pub fn torus_two_exit_level() -> LevelSpec {
     let torus_axis = Vec3f::new(0.0, 1.0, 0.0); // horizontal ring
     let major_radius = 60.0; // ring radius
     let minor_radius = 10.0; // tube interior radius (open space)
-    let torus_wall = 2.0;    // shell thickness similar to room/tunnel
+    let torus_wall = 2.0; // shell thickness similar to room/tunnel
 
     // Exits: choose two angles ~160° apart.
     //  - Mining chamber exit: angled slightly toward +X (e.g., +20°)
     //  - Dock exit: opposite side at +180° (roughly 160° separation from +20°)
-    let exit_to_chamber = TorusExitSpec { angle_deg: 20.0, width_deg: 35.0, label: "mining_chamber".to_string() };
-    let exit_to_dock = TorusExitSpec { angle_deg: 180.0, width_deg: 35.0, label: "dock".to_string() };
+    let exit_to_chamber = TorusExitSpec {
+        angle_deg: 20.0,
+        width_deg: 35.0,
+        label: "mining_chamber".to_string(),
+    };
+    let exit_to_dock = TorusExitSpec {
+        angle_deg: 180.0,
+        width_deg: 35.0,
+        label: "dock".to_string(),
+    };
 
     LevelSpec {
         room: RoomSpec {
@@ -87,9 +101,15 @@ pub fn torus_two_exit_level() -> LevelSpec {
             pos: tunnel_pos,
             shell_thickness: wall_thick,
             // Mild forward flow through the straight section (+X in world)
-            flow: FlowFieldSpec::Uniform { flow: Vec3f::new(2.0, 0.0, 0.2), variance: 0.15 },
+            flow: FlowFieldSpec::Uniform {
+                flow: Vec3f::new(2.0, 0.0, 0.2),
+                variance: 0.15,
+            },
         },
-        chamber: ChamberSpec { size: chamber_size, pos: chamber_pos },
+        chamber: ChamberSpec {
+            size: chamber_size,
+            pos: chamber_pos,
+        },
         torus_tunnel: Some(TorusTunnelSpec {
             center: torus_center,
             axis: torus_axis,
@@ -97,7 +117,10 @@ pub fn torus_two_exit_level() -> LevelSpec {
             minor_radius,
             wall_thickness: torus_wall,
             // Uniform magnitude along +X; the client/physics may choose to align to local tangent.
-            flow: FlowFieldSpec::Uniform { flow: Vec3f::new(2.5, 0.0, 0.0), variance: 0.2 },
+            flow: FlowFieldSpec::Uniform {
+                flow: Vec3f::new(2.5, 0.0, 0.0),
+                variance: 0.2,
+            },
             exits: [exit_to_dock, exit_to_chamber],
         }),
     }

@@ -50,7 +50,12 @@ mod tests {
         let yaw_l = quat_to_yaw(q_left_90);
         let yaw_r = quat_to_yaw(q_right_90);
         // Should be opposite signs
-        assert!(yaw_l * yaw_r <= 0.0, "left/right yaws should have opposite sign: {} vs {}", yaw_l, yaw_r);
+        assert!(
+            yaw_l * yaw_r <= 0.0,
+            "left/right yaws should have opposite sign: {} vs {}",
+            yaw_l,
+            yaw_r
+        );
         // Magnitudes should be near 90 deg (pi/2) up to the function's sign convention
         assert!((yaw_l.abs() - std::f32::consts::FRAC_PI_2).abs() < 1e-3);
         assert!((yaw_r.abs() - std::f32::consts::FRAC_PI_2).abs() < 1e-3);

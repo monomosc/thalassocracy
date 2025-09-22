@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::Vec3f;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FlowFieldSpec {
@@ -8,8 +8,8 @@ pub enum FlowFieldSpec {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoomSpec {
-    pub size: Vec3f,          // interior volume size
-    pub wall_thickness: f32,  // shell thickness for floor/ceiling/walls
+    pub size: Vec3f,         // interior volume size
+    pub wall_thickness: f32, // shell thickness for floor/ceiling/walls
     pub dock_size: Vec3f,
     pub dock_pos: Vec3f,
 }

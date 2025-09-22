@@ -1,5 +1,5 @@
+use crate::debug_vis::LabelNode;
 use bevy::prelude::*;
-use crate::debug_vis::{LabelNode};
 
 #[derive(Resource, Clone)]
 pub struct LabelFont(pub Handle<Font>);
@@ -34,7 +34,9 @@ fn attach_initial_labels(
     q_dock: Query<Entity, With<crate::scene::greybox::DockPad>>,
     existing: Query<&TracksEntity>,
 ) {
-    let Some(font) = font else { return; };
+    let Some(font) = font else {
+        return;
+    };
     // Helper to spawn a UI text label that tracks an entity
     let mut spawn_label = |target: Entity, text: &str, color: Color| {
         commands.spawn((
@@ -46,7 +48,11 @@ fn attach_initial_labels(
                 ..Default::default()
             },
             Text::new(text.to_string()),
-            TextFont { font: font.0.clone(), font_size: 16.0, ..Default::default() },
+            TextFont {
+                font: font.0.clone(),
+                font_size: 16.0,
+                ..Default::default()
+            },
             TextColor(color),
             TracksEntity(target),
             LabelNode,
@@ -56,16 +62,24 @@ fn attach_initial_labels(
 
     // Spawn exactly one label per category if it doesn't exist yet
     if let Some(e) = q_station.iter().next() {
-        if !existing.iter().any(|t| t.0 == e) { spawn_label(e, "Station", Color::WHITE); }
+        if !existing.iter().any(|t| t.0 == e) {
+            spawn_label(e, "Station", Color::WHITE);
+        }
     }
     if let Some(e) = q_tunnel.iter().next() {
-        if !existing.iter().any(|t| t.0 == e) { spawn_label(e, "Tunnel", Color::srgb(1.0, 1.0, 0.0)); }
+        if !existing.iter().any(|t| t.0 == e) {
+            spawn_label(e, "Tunnel", Color::srgb(1.0, 1.0, 0.0));
+        }
     }
     if let Some(e) = q_chamber.iter().next() {
-        if !existing.iter().any(|t| t.0 == e) { spawn_label(e, "Chamber", Color::srgb(1.0, 0.27, 0.0)); }
+        if !existing.iter().any(|t| t.0 == e) {
+            spawn_label(e, "Chamber", Color::srgb(1.0, 0.27, 0.0));
+        }
     }
     if let Some(e) = q_dock.iter().next() {
-        if !existing.iter().any(|t| t.0 == e) { spawn_label(e, "Dock", Color::srgb(0.0, 1.0, 1.0)); }
+        if !existing.iter().any(|t| t.0 == e) {
+            spawn_label(e, "Dock", Color::srgb(0.0, 1.0, 1.0));
+        }
     }
 }
 
@@ -77,9 +91,14 @@ fn update_label_positions(
     // Choose the active 3D camera (avoid UI Camera2d)
     let mut cam_pair: Option<(&Camera, &GlobalTransform)> = None;
     for (cam, gt) in &q_camera3d {
-        if cam.is_active { cam_pair = Some((cam, gt)); break; }
+        if cam.is_active {
+            cam_pair = Some((cam, gt));
+            break;
+        }
     }
-    let Some((camera, cam_transform)) = cam_pair else { return; };
+    let Some((camera, cam_transform)) = cam_pair else {
+        return;
+    };
     let viewport = match camera.logical_viewport_size() {
         Some(v) => v,
         None => return,
