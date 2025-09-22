@@ -1,13 +1,15 @@
 use bevy::asset::load_internal_asset;
-use bevy::core_pipeline::{
-    core_3d::graph::{Core3d, Node3d},
-    fullscreen_vertex_shader::fullscreen_shader_vertex_state,
-};
+use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::ecs::query::QueryItem;
 use bevy::pbr::SpotLight;
 use bevy::prelude::*;
 use bevy::render::{
     camera::ExtractedCamera,
+    mesh::{
+        allocator::MeshAllocator, Mesh, Mesh3d, MeshVertexBufferLayoutRef, RenderMesh,
+        RenderMeshBufferInfo,
+    },
+    render_asset::RenderAssets,
     render_graph::{
         NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
     },
@@ -16,18 +18,19 @@ use bevy::render::{
         BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, Buffer,
         BufferBindingType, BufferInitDescriptor, BufferUsages, CachedRenderPipelineId,
         ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-        Extent3d, FilterMode, FragmentState, LoadOp, MultisampleState, Operations, PipelineCache,
-        PrimitiveState, RenderPassDescriptor, RenderPassDepthStencilAttachment,
+        Extent3d, FilterMode, FragmentState, IndexFormat, LoadOp, MultisampleState, Operations,
+        PipelineCache, PrimitiveState, RenderPassDepthStencilAttachment, RenderPassDescriptor,
         RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, Shader,
         ShaderStages, SpecializedRenderPipeline, SpecializedRenderPipelines, StencilState, StoreOp,
         Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType,
-        TextureUsages, TextureViewDescriptor, TextureViewDimension,
+        TextureUsages, TextureViewDescriptor, TextureViewDimension, VertexState,
     },
-    renderer::{RenderContext, RenderDevice, RenderQueue},
-    view::{ExtractedView, ViewDepthTexture, ViewTarget},
+    renderer::{RenderContext, RenderDevice},
+    view::{ExtractedView, Msaa, ViewDepthTexture, ViewTarget},
     Extract, ExtractSchedule, Render, RenderApp, RenderSet,
 };
 use bytemuck::{Pod, Zeroable};
+use std::collections::HashMap;
 pub mod debug_material;
 pub use debug_material::{VolumetricConeDebugMaterial, VOLUMETRIC_CONE_DEBUG_SHADER_HANDLE};
 
@@ -75,7 +78,6 @@ struct ConeVolumePipeline {
     view_layout: BindGroupLayout,
     cone_layout: BindGroupLayout,
     fallback_shadow_texture: Texture,
-    fallback_depth_texture: Texture,
     fallback_shadow_sampler: Sampler,
 }
 
@@ -84,20 +86,6 @@ impl FromWorld for ConeVolumePipeline {
         let device = world.resource::<RenderDevice>();
         let shadow_texture = device.create_texture(&TextureDescriptor {
             label: Some("cone_volume_fallback_shadow"),
-            size: Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Depth32Float,
-            usage: TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let depth_texture = device.create_texture(&TextureDescriptor {
-            label: Some("cone_volume_fallback_depth"),
             size: Extent3d {
                 width: 1,
                 height: 1,
@@ -144,7 +132,7 @@ impl FromWorld for ConeVolumePipeline {
             &[
                 BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -168,9 +156,9 @@ impl FromWorld for ConeVolumePipeline {
             Some("cone_volume_cone_bgl"),
             &[BindGroupLayoutEntry {
                 binding: 0,
-                visibility: ShaderStages::FRAGMENT,
+                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                 ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
+                    ty: BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -182,20 +170,28 @@ impl FromWorld for ConeVolumePipeline {
             view_layout,
             cone_layout,
             fallback_shadow_texture: shadow_texture,
-            fallback_depth_texture: depth_texture,
             fallback_shadow_sampler: shadow_sampler,
         }
     }
 }
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+
+#[derive(Clone, Hash, PartialEq, Eq)]
 struct ConeVolumePipelineKey {
     format: TextureFormat,
+    sample_count: u32,
+    vertex_layout: MeshVertexBufferLayoutRef,
 }
 
 impl SpecializedRenderPipeline for ConeVolumePipeline {
     type Key = ConeVolumePipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let vertex_layout = key
+            .vertex_layout
+            .0
+            .get_layout(&[Mesh::ATTRIBUTE_POSITION.at_shader_location(0)])
+            .expect("Cone mesh missing POSITION attribute");
+
         RenderPipelineDescriptor {
             label: Some("cone_volume_raymarch".into()),
             layout: vec![
@@ -203,7 +199,12 @@ impl SpecializedRenderPipeline for ConeVolumePipeline {
                 self.view_layout.clone(),
                 self.cone_layout.clone(),
             ],
-            vertex: fullscreen_shader_vertex_state(),
+            vertex: VertexState {
+                shader: CONE_VOLUME_SHADER_HANDLE,
+                shader_defs: vec![],
+                entry_point: "vertex".into(),
+                buffers: vec![vertex_layout],
+            },
             fragment: Some(FragmentState {
                 shader: CONE_VOLUME_SHADER_HANDLE,
                 shader_defs: vec![],
@@ -225,9 +226,21 @@ impl SpecializedRenderPipeline for ConeVolumePipeline {
                     write_mask: ColorWrites::ALL,
                 })],
             }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
+            primitive: PrimitiveState {
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: false,
+                depth_compare: CompareFunction::LessEqual,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
+            multisample: MultisampleState {
+                count: key.sample_count,
+                ..Default::default()
+            },
             push_constant_ranges: vec![],
             zero_initialize_workgroup_memory: false,
         }
@@ -244,6 +257,8 @@ pub struct RenderConeLight {
     pub color: LinearRgba,
     pub cos_inner: f32,
     pub cos_outer: f32,
+    pub mesh: Handle<Mesh>,
+    pub model: Mat4,
 }
 
 #[derive(Resource, Default, Clone)]
@@ -251,20 +266,19 @@ pub struct ExtractedConeLights {
     pub cones: Vec<RenderConeLight>,
 }
 
-#[derive(Component, Clone, Debug, Default)]
-pub struct ViewConeLights {
-    pub cones: Vec<RenderConeLight>,
-}
 #[derive(Component)]
-struct ViewConeBindGroups {
+struct ViewConeRenderData {
     pipeline_id: CachedRenderPipelineId,
     global: BindGroup,
     view: BindGroup,
-    cones: BindGroup,
-    cone_buffer: Buffer,
+    view_uniform: Buffer,
+    draws: Vec<ConeDraw>,
+}
+
+struct ConeDraw {
+    bind_group: BindGroup,
     uniform_buffer: Buffer,
-    cone_count: u32,
-    cone_capacity: u32,
+    mesh: Handle<Mesh>,
 }
 
 #[repr(C)]
@@ -273,17 +287,19 @@ struct ConeVolumeViewUniform {
     inv_view_proj: Mat4,
     view_proj: Mat4,
     camera_position: Vec4,
-    near_far: Vec4,
+    screen_size: Vec4,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct ConeVolumeGpuCone {
+struct ConeVolumePerConeUniform {
+    model: Mat4,
     apex: Vec4,
     direction_range: Vec4,
     color_intensity: Vec4,
     angles: Vec4,
 }
+
 fn extract_volumetric_mode(mut commands: Commands, mode: Extract<Res<VolumetricLightingState>>) {
     commands.insert_resource(RenderVolumetricLightingMode(mode.mode));
 }
@@ -292,20 +308,32 @@ fn extract_cone_lights(
     mut commands: Commands,
     state: Extract<Res<VolumetricLightingState>>,
     lights: Extract<Query<(Entity, &SpotLight, &GlobalTransform, Option<&Children>)>>,
-    cone_markers: Extract<Query<(), With<VolumetricCone>>>,
+    cones_query: Extract<Query<(Entity, &GlobalTransform, &Mesh3d), With<VolumetricCone>>>,
 ) {
     let mut cones = Vec::new();
     if matches!(state.mode, VolumetricLightingMode::RaymarchCones) {
+        let mut cone_data: HashMap<Entity, (Handle<Mesh>, Mat4)> = HashMap::default();
+        for (entity, transform, mesh) in cones_query.iter() {
+            cone_data.insert(entity, (mesh.0.clone(), transform.compute_matrix()));
+        }
+
         for (entity, light, transform, children) in lights.iter() {
             if light.range <= 0.1 {
                 continue;
             }
-            let has_cone = children
-                .map(|kids| kids.iter().any(|child| cone_markers.get(child).is_ok()))
-                .unwrap_or(false);
-            if !has_cone {
-                continue;
+
+            let mut mesh_and_model = None;
+            if let Some(children) = children {
+                for child in children.iter() {
+                    if let Some(data) = cone_data.get(&child) {
+                        mesh_and_model = Some(data.clone());
+                        break;
+                    }
+                }
             }
+            let Some((mesh, model)) = mesh_and_model else {
+                continue;
+            };
 
             let world_transform = transform.compute_transform();
             let direction = (world_transform.rotation * Vec3::NEG_Z).normalize_or_zero();
@@ -319,158 +347,208 @@ fn extract_cone_lights(
                 color: light.color.into(),
                 cos_inner: light.inner_angle.cos(),
                 cos_outer: light.outer_angle.cos(),
+                mesh,
+                model,
             });
         }
     }
 
     commands.insert_resource(ExtractedConeLights { cones });
 }
+
 fn prepare_view_cone_lights(
     mut commands: Commands,
-    views: Query<(Entity, &ExtractedView, Option<&ViewDepthTexture>)>,
+    views: Query<(
+        Entity,
+        &ExtractedView,
+        Option<&ViewDepthTexture>,
+        Option<&Msaa>,
+    )>,
     cones: Res<ExtractedConeLights>,
     mode: Res<RenderVolumetricLightingMode>,
     pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<ConeVolumePipeline>>,
     pipeline: Res<ConeVolumePipeline>,
     render_device: Res<RenderDevice>,
+    mesh_assets: Res<RenderAssets<RenderMesh>>,
 ) {
     let raymarch = matches!(mode.0, VolumetricLightingMode::RaymarchCones);
-    for (entity, view, depth_texture) in &views {
+    for (entity, view, depth_texture, msaa) in &views {
         let mut entity_commands = commands.entity(entity);
-        if raymarch && !cones.cones.is_empty() {
-            let format = if view.hdr {
-                ViewTarget::TEXTURE_FORMAT_HDR
-            } else {
-                TextureFormat::bevy_default()
-            };
-            let key = ConeVolumePipelineKey { format };
-            let pipeline_id = pipelines.specialize(&pipeline_cache, &pipeline, key);
+        if !(raymarch && !cones.cones.is_empty()) {
+            entity_commands.remove::<ViewConeRenderData>();
+            continue;
+        }
 
-            let world_from_view = view.world_from_view.compute_matrix();
-            let view_from_world = world_from_view.inverse();
-            let clip_from_world = view
-                .clip_from_world
-                .unwrap_or(view.clip_from_view * view_from_world);
-            let inv_view_proj = clip_from_world.inverse();
-            let camera_position = view.world_from_view.translation();
-            let view_uniform = ConeVolumeViewUniform {
-                inv_view_proj,
-                view_proj: clip_from_world,
-                camera_position: Vec4::new(
-                    camera_position.x,
-                    camera_position.y,
-                    camera_position.z,
-                    1.0,
-                ),
-                near_far: Vec4::new(0.1, 1000.0, 0.0, 0.0),
+        let Some(depth_texture) = depth_texture else {
+            entity_commands.remove::<ViewConeRenderData>();
+            continue;
+        };
+
+        let Some(first_cone) = cones.cones.first() else {
+            entity_commands.remove::<ViewConeRenderData>();
+            continue;
+        };
+        let Some(render_mesh) = mesh_assets.get(&first_cone.mesh) else {
+            entity_commands.remove::<ViewConeRenderData>();
+            continue;
+        };
+
+        let pipeline_ref = &*pipeline;
+        let format = if view.hdr {
+            ViewTarget::TEXTURE_FORMAT_HDR
+        } else {
+            TextureFormat::bevy_default()
+        };
+        let sample_count = msaa.map(|m| m.samples()).unwrap_or(1);
+        let key = ConeVolumePipelineKey {
+            format,
+            sample_count,
+            vertex_layout: render_mesh.layout.clone(),
+        };
+        let pipeline_id = pipelines.specialize(&pipeline_cache, pipeline_ref, key);
+
+        let world_from_view = view.world_from_view.compute_matrix();
+        let view_from_world = world_from_view.inverse();
+        let clip_from_world = view
+            .clip_from_world
+            .unwrap_or(view.clip_from_view * view_from_world);
+        let inv_view_proj = clip_from_world.inverse();
+        let camera_position = view.world_from_view.translation();
+        let viewport = view.viewport;
+        let screen_width = viewport.z.max(1) as f32;
+        let screen_height = viewport.w.max(1) as f32;
+        let inv_screen_width = if screen_width > 0.0 {
+            1.0 / screen_width
+        } else {
+            0.0
+        };
+        let inv_screen_height = if screen_height > 0.0 {
+            1.0 / screen_height
+        } else {
+            0.0
+        };
+        let view_uniform = ConeVolumeViewUniform {
+            inv_view_proj,
+            view_proj: clip_from_world,
+            camera_position: Vec4::new(
+                camera_position.x,
+                camera_position.y,
+                camera_position.z,
+                1.0,
+            ),
+            screen_size: Vec4::new(
+                screen_width,
+                screen_height,
+                inv_screen_width,
+                inv_screen_height,
+            ),
+        };
+        let view_uniform_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("cone_volume_view_uniform"),
+            contents: bytemuck::bytes_of(&view_uniform),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let shadow_view =
+            pipeline_ref
+                .fallback_shadow_texture
+                .create_view(&TextureViewDescriptor {
+                    dimension: Some(TextureViewDimension::D2Array),
+                    ..Default::default()
+                });
+
+        let global_bind_group = render_device.create_bind_group(
+            Some("cone_volume_global_bg"),
+            &pipeline_ref.global_layout,
+            &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&shadow_view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&pipeline_ref.fallback_shadow_sampler),
+                },
+            ],
+        );
+
+        let view_bind_group = render_device.create_bind_group(
+            Some("cone_volume_view_bg"),
+            &pipeline_ref.view_layout,
+            &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: view_uniform_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(depth_texture.view()),
+                },
+            ],
+        );
+
+        let mut draws = Vec::new();
+        for cone in &cones.cones {
+            let Some(_) = mesh_assets.get(&cone.mesh) else {
+                continue;
             };
+
+            let cone_uniform = ConeVolumePerConeUniform {
+                model: cone.model,
+                apex: Vec4::new(cone.apex.x, cone.apex.y, cone.apex.z, 1.0),
+                direction_range: Vec4::new(
+                    cone.direction.x,
+                    cone.direction.y,
+                    cone.direction.z,
+                    cone.range,
+                ),
+                color_intensity: Vec4::new(
+                    cone.color.red,
+                    cone.color.green,
+                    cone.color.blue,
+                    cone.intensity,
+                ),
+                angles: Vec4::new(cone.cos_inner, cone.cos_outer, 0.0, 0.0),
+            };
+
             let uniform_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-                label: Some("cone_volume_view_uniform"),
-                contents: bytemuck::bytes_of(&view_uniform),
+                label: Some("cone_volume_cone_uniform"),
+                contents: bytemuck::bytes_of(&cone_uniform),
                 usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             });
 
-            let gpu_cones: Vec<ConeVolumeGpuCone> = cones
-                .cones
-                .iter()
-                .map(|cone| ConeVolumeGpuCone {
-                    apex: Vec4::new(cone.apex.x, cone.apex.y, cone.apex.z, 1.0),
-                    direction_range: Vec4::new(
-                        cone.direction.x,
-                        cone.direction.y,
-                        cone.direction.z,
-                        cone.range,
-                    ),
-                    color_intensity: Vec4::new(
-                        cone.color.red,
-                        cone.color.green,
-                        cone.color.blue,
-                        cone.intensity,
-                    ),
-                    angles: Vec4::new(cone.cos_inner, cone.cos_outer, 0.0, 0.0),
-                })
-                .collect();
-
-            let cone_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-                label: Some("cone_volume_cone_buffer"),
-                contents: bytemuck::cast_slice(&gpu_cones),
-                usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            });
-
-            let shadow_view =
-                pipeline
-                    .fallback_shadow_texture
-                    .create_view(&TextureViewDescriptor {
-                        dimension: Some(TextureViewDimension::D2Array),
-                        ..Default::default()
-                    });
-
-            let fallback_depth_view = pipeline
-                .fallback_depth_texture
-                .create_view(&TextureViewDescriptor::default());
-            let depth_view_ref = depth_texture
-                .map(|depth| depth.view())
-                .unwrap_or(&fallback_depth_view);
-
-            let global_bind_group = render_device.create_bind_group(
-                Some("cone_volume_global_bg"),
-                &pipeline.global_layout,
-                &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: BindingResource::TextureView(&shadow_view),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::Sampler(&pipeline.fallback_shadow_sampler),
-                    },
-                ],
-            );
-
-            let view_bind_group = render_device.create_bind_group(
-                Some("cone_volume_view_bg"),
-                &pipeline.view_layout,
-                &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::TextureView(depth_view_ref),
-                    },
-                ],
-            );
-
-            let cones_bind_group = render_device.create_bind_group(
+            let cone_bind_group = render_device.create_bind_group(
                 Some("cone_volume_cone_bg"),
-                &pipeline.cone_layout,
+                &pipeline_ref.cone_layout,
                 &[BindGroupEntry {
                     binding: 0,
-                    resource: cone_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 }],
             );
 
-            entity_commands.insert(ViewConeLights {
-                cones: cones.cones.clone(),
-            });
-            entity_commands.insert(ViewConeBindGroups {
-                pipeline_id,
-                global: global_bind_group,
-                view: view_bind_group,
-                cones: cones_bind_group,
-                cone_buffer,
+            draws.push(ConeDraw {
+                bind_group: cone_bind_group,
                 uniform_buffer,
-                cone_count: gpu_cones.len() as u32,
-                cone_capacity: gpu_cones.len() as u32,
+                mesh: cone.mesh.clone(),
             });
-        } else {
-            entity_commands.remove::<ViewConeLights>();
-            entity_commands.remove::<ViewConeBindGroups>();
         }
+
+        if draws.is_empty() {
+            entity_commands.remove::<ViewConeRenderData>();
+            continue;
+        }
+
+        entity_commands.insert(ViewConeRenderData {
+            pipeline_id,
+            global: global_bind_group,
+            view: view_bind_group,
+            view_uniform: view_uniform_buffer,
+            draws,
+        });
     }
 }
+
 #[derive(RenderLabel, Debug, Clone, Hash, PartialEq, Eq)]
 struct FloodlightPassLabel;
 
@@ -481,31 +559,41 @@ impl ViewNode for FloodlightViewNode {
     type ViewQuery = (
         &'static ExtractedCamera,
         &'static ViewTarget,
-        Option<&'static ViewConeBindGroups>,
+        Option<&'static ViewDepthTexture>,
+        Option<&'static ViewConeRenderData>,
     );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, target, bindings): QueryItem<Self::ViewQuery>,
+        (camera, target, depth_texture, render_data): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let mode = world.resource::<RenderVolumetricLightingMode>();
         if mode.0 != VolumetricLightingMode::RaymarchCones {
             return Ok(());
         }
-        let Some(bindings) = bindings else {
+
+        let Some(render_data) = render_data else {
             return Ok(());
         };
-        if bindings.cone_count == 0 {
+        if render_data.draws.is_empty() {
             return Ok(());
         }
 
         let pipeline_cache = world.resource::<PipelineCache>();
-        let Some(pipeline) = pipeline_cache.get_render_pipeline(bindings.pipeline_id) else {
+        let Some(pipeline) = pipeline_cache.get_render_pipeline(render_data.pipeline_id) else {
             return Ok(());
         };
+
+        let Some(depth_texture) = depth_texture else {
+            return Ok(());
+        };
+        let depth_view = depth_texture.view();
+
+        let mesh_allocator = world.resource::<MeshAllocator>();
+        let mesh_assets = world.resource::<RenderAssets<RenderMesh>>();
 
         let mut color_attachment = target.get_color_attachment();
         color_attachment.ops = Operations {
@@ -516,7 +604,14 @@ impl ViewNode for FloodlightViewNode {
         let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("cone_volume_pass"),
             color_attachments: &[Some(color_attachment)],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: depth_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Load,
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
@@ -524,14 +619,56 @@ impl ViewNode for FloodlightViewNode {
         if let Some(viewport) = camera.viewport.as_ref() {
             render_pass.set_camera_viewport(viewport);
         }
+
         render_pass.set_render_pipeline(pipeline);
-        render_pass.set_bind_group(0, &bindings.global, &[]);
-        render_pass.set_bind_group(1, &bindings.view, &[]);
-        render_pass.set_bind_group(2, &bindings.cones, &[]);
-        render_pass.draw(0..3, 0..bindings.cone_count);
+        render_pass.set_bind_group(0, &render_data.global, &[]);
+        render_pass.set_bind_group(1, &render_data.view, &[]);
+
+        for draw in &render_data.draws {
+            let Some(render_mesh) = mesh_assets.get(&draw.mesh) else {
+                continue;
+            };
+            let Some(vertex_slice) = mesh_allocator.mesh_vertex_slice(&draw.mesh.id()) else {
+                continue;
+            };
+
+            render_pass.set_bind_group(2, &draw.bind_group, &[]);
+            render_pass.set_vertex_buffer(0, vertex_slice.buffer.slice(..));
+
+            match &render_mesh.buffer_info {
+                RenderMeshBufferInfo::Indexed {
+                    index_format,
+                    count,
+                } => {
+                    let Some(index_slice) = mesh_allocator.mesh_index_slice(&draw.mesh.id()) else {
+                        continue;
+                    };
+                    let index_stride = match index_format {
+                        IndexFormat::Uint16 => 2u64,
+                        IndexFormat::Uint32 => 4u64,
+                    };
+                    let offset = index_slice.range.start as u64 * index_stride;
+                    render_pass.set_index_buffer(
+                        index_slice.buffer.slice(..),
+                        offset,
+                        *index_format,
+                    );
+                    render_pass.draw_indexed(
+                        index_slice.range.start..(index_slice.range.start + count),
+                        vertex_slice.range.start as i32,
+                        0..1,
+                    );
+                }
+                RenderMeshBufferInfo::NonIndexed => {
+                    render_pass.draw(vertex_slice.range.clone(), 0..1);
+                }
+            }
+        }
+
         Ok(())
     }
 }
+
 pub struct VolumetricFloodlightsPlugin;
 
 impl Plugin for VolumetricFloodlightsPlugin {

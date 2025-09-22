@@ -1,15 +1,16 @@
-struct Cone {
-    apex: vec4<f32>;
-    direction_range: vec4<f32>;
-    color_intensity: vec4<f32>;
-    angles: vec4<f32>;
-};
-
 struct ViewUniform {
     inv_view_proj: mat4x4<f32>;
     view_proj: mat4x4<f32>;
     camera_position: vec4<f32>;
     screen_size: vec4<f32>;
+};
+
+struct ConeUniform {
+    model: mat4x4<f32>;
+    apex: vec4<f32>;
+    direction_range: vec4<f32>;
+    color_intensity: vec4<f32>;
+    angles: vec4<f32>;
 };
 
 @group(0) @binding(0) var shadow_atlas: texture_depth_2d_array;
@@ -18,14 +19,20 @@ struct ViewUniform {
 @group(1) @binding(0) var<uniform> view_uniform: ViewUniform;
 @group(1) @binding(1) var view_depth: texture_depth_2d;
 
-@group(2) @binding(0) var<storage, read> cone_buffer: array<Cone>;
+@group(2) @binding(0) var<uniform> cone_uniform: ConeUniform;
+
+struct VertexInput {
+    @location(0) position: vec3<f32>;
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>;
+    @location(0) world_position: vec3<f32>;
+};
 
 struct FragmentOutput {
     @location(0) color: vec4<f32>;
 };
-
-const MARCH_STEPS: u32 = 16u;
-const EPS: f32 = 1e-4;
 
 fn ndc_from_position(position: vec2<f32>, inv_screen_size: vec2<f32>) -> vec2<f32> {
     let uv = position * inv_screen_size;
@@ -58,7 +65,7 @@ fn validate_cone_hit(
     tan_outer: f32,
     range: f32,
 ) -> bool {
-    if t <= EPS {
+    if t <= 1e-4 {
         return false;
     }
     let sample_pos = origin + dir * t;
@@ -139,24 +146,26 @@ fn intersect_cone(
         t_enter = 0.0;
     }
 
-    if !found || t_exit <= t_enter + EPS {
+    if !found || t_exit <= t_enter + 1e-4 {
         return vec2<f32>(1e32, -1e32);
     }
 
     return vec2<f32>(max(t_enter, 0.0), t_exit);
 }
 
+const MARCH_STEPS: u32 = 16u;
+const EPS: f32 = 1e-4;
+
 fn march_cone(
-    cone: Cone,
     camera_pos: vec3<f32>,
     ray_dir: vec3<f32>,
     camera_depth: f32,
 ) -> vec3<f32> {
-    let apex = cone.apex.xyz;
-    let axis = normalize(cone.direction_range.xyz);
-    let range = max(cone.direction_range.w, 0.001);
-    let cos_inner = cone.angles.x;
-    let cos_outer = cone.angles.y;
+    let apex = cone_uniform.apex.xyz;
+    let axis = normalize(cone_uniform.direction_range.xyz);
+    let range = max(cone_uniform.direction_range.w, 0.001);
+    let cos_inner = cone_uniform.angles.x;
+    let cos_outer = cone_uniform.angles.y;
     let cos_outer_clamped = clamp(cos_outer, -0.9999, 0.9999);
     let cos_inner_clamped = clamp(cos_inner, cos_outer_clamped, 0.9999);
     let sin_outer_sq = max(1.0 - cos_outer_clamped * cos_outer_clamped, 1e-4);
@@ -183,8 +192,8 @@ fn march_cone(
 
     var accum = vec3<f32>(0.0);
     var transmittance = 1.0;
-    let base_color = cone.color_intensity.xyz;
-    let light_intensity = cone.color_intensity.w;
+    let base_color = cone_uniform.color_intensity.xyz;
+    let light_intensity = cone_uniform.color_intensity.w;
     let sigma_a = 0.35;
 
     for (var step: u32 = 0u; step < steps; step = step + 1u) {
@@ -232,8 +241,19 @@ fn march_cone(
     return accum;
 }
 
+@vertex
+fn vertex(@location(0) position: vec3<f32>) -> VertexOutput {
+    let local = vec4<f32>(position, 1.0);
+    let world = cone_uniform.model * local;
+    let clip = view_uniform.view_proj * world;
+    return VertexOutput(clip, world.xyz / world.w);
+}
+
 @fragment
-fn fragment(@builtin(position) position: vec4<f32>) -> FragmentOutput {
+fn fragment(
+    @builtin(position) position: vec4<f32>,
+    in: VertexOutput,
+) -> FragmentOutput {
     let _ = textureDimensions(shadow_atlas);
     let _ = shadow_sampler;
 
@@ -245,8 +265,7 @@ fn fragment(@builtin(position) position: vec4<f32>) -> FragmentOutput {
 
     let ndc_xy = ndc_from_position(position.xy, inv_screen_size);
     let camera_pos = view_uniform.camera_position.xyz;
-    let far_world = world_from_ndc(vec3<f32>(ndc_xy, 1.0));
-    var ray_dir = far_world - camera_pos;
+    var ray_dir = in.world_position - camera_pos;
     let ray_length = length(ray_dir);
     if ray_length <= EPS {
         return FragmentOutput(vec4<f32>(0.0, 0.0, 0.0, 1.0));
@@ -268,17 +287,6 @@ fn fragment(@builtin(position) position: vec4<f32>) -> FragmentOutput {
         }
     }
 
-    let cone_count = arrayLength(&cone_buffer);
-    var accum = vec3<f32>(0.0);
-    for (var i: u32 = 0u; i < cone_count; i = i + 1u) {
-        accum += march_cone(cone_buffer[i], camera_pos, ray_dir, camera_depth);
-    }
-
+    let accum = march_cone(camera_pos, ray_dir, camera_depth);
     return FragmentOutput(vec4<f32>(accum, 1.0));
 }
-
-
-
-
-
-

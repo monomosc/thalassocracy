@@ -358,4 +358,3 @@ fn make_unit_cone_negz(segments: usize) -> Mesh {
     mesh.insert_indices(Indices::U32(indices));
     mesh
 }
-
