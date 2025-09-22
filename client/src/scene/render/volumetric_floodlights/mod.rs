@@ -39,7 +39,6 @@ pub mod volumetric_cone_material;
 mod legacy;
 use self::legacy::VolumetricCone;
 
-// A tiny debug shader that just draws a teal swirl additively
 #[allow(deprecated)]
 pub const CONE_VOLUME_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(0x6de2_9d11_cdbd_4a46_ba4c_6f7a_ee9f_c3f2);
@@ -72,8 +71,12 @@ impl Default for RenderVolumetricLightingMode {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 struct ConeVolumePipeline {
+    resources: Option<ConePipelineResources>,
+}
+
+struct ConePipelineResources {
     global_layout: BindGroupLayout,
     view_layout: BindGroupLayout,
     cone_layout: BindGroupLayout,
@@ -81,9 +84,12 @@ struct ConeVolumePipeline {
     fallback_shadow_sampler: Sampler,
 }
 
-impl FromWorld for ConeVolumePipeline {
-    fn from_world(world: &mut World) -> Self {
-        let device = world.resource::<RenderDevice>();
+impl ConeVolumePipeline {
+    fn ensure_initialized(&mut self, device: &RenderDevice) {
+        if self.resources.is_some() {
+            return;
+        }
+
         let shadow_texture = device.create_texture(&TextureDescriptor {
             label: Some("cone_volume_fallback_shadow"),
             size: Extent3d {
@@ -98,6 +104,7 @@ impl FromWorld for ConeVolumePipeline {
             usage: TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
+
         let shadow_sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("cone_volume_shadow_sampler"),
             mag_filter: FilterMode::Linear,
@@ -106,6 +113,7 @@ impl FromWorld for ConeVolumePipeline {
             compare: Some(CompareFunction::LessEqual),
             ..Default::default()
         });
+
         let global_layout = device.create_bind_group_layout(
             Some("cone_volume_global_bgl"),
             &[
@@ -127,6 +135,7 @@ impl FromWorld for ConeVolumePipeline {
                 },
             ],
         );
+
         let view_layout = device.create_bind_group_layout(
             Some("cone_volume_view_bgl"),
             &[
@@ -152,6 +161,7 @@ impl FromWorld for ConeVolumePipeline {
                 },
             ],
         );
+
         let cone_layout = device.create_bind_group_layout(
             Some("cone_volume_cone_bgl"),
             &[BindGroupLayoutEntry {
@@ -165,13 +175,20 @@ impl FromWorld for ConeVolumePipeline {
                 count: None,
             }],
         );
-        Self {
+
+        self.resources = Some(ConePipelineResources {
             global_layout,
             view_layout,
             cone_layout,
             fallback_shadow_texture: shadow_texture,
             fallback_shadow_sampler: shadow_sampler,
-        }
+        });
+    }
+
+    fn resources(&self) -> &ConePipelineResources {
+        self.resources
+            .as_ref()
+            .expect("ConeVolumePipeline::ensure_initialized must be called before use")
     }
 }
 
@@ -192,12 +209,14 @@ impl SpecializedRenderPipeline for ConeVolumePipeline {
             .get_layout(&[Mesh::ATTRIBUTE_POSITION.at_shader_location(0)])
             .expect("Cone mesh missing POSITION attribute");
 
+        let resources = self.resources();
+
         RenderPipelineDescriptor {
             label: Some("cone_volume_raymarch".into()),
             layout: vec![
-                self.global_layout.clone(),
-                self.view_layout.clone(),
-                self.cone_layout.clone(),
+                resources.global_layout.clone(),
+                resources.view_layout.clone(),
+                resources.cone_layout.clone(),
             ],
             vertex: VertexState {
                 shader: CONE_VOLUME_SHADER_HANDLE,
@@ -271,13 +290,13 @@ struct ViewConeRenderData {
     pipeline_id: CachedRenderPipelineId,
     global: BindGroup,
     view: BindGroup,
-    view_uniform: Buffer,
+    _view_uniform: Buffer,
     draws: Vec<ConeDraw>,
 }
 
 struct ConeDraw {
     bind_group: BindGroup,
-    uniform_buffer: Buffer,
+    _uniform_buffer: Buffer,
     mesh: Handle<Mesh>,
 }
 
@@ -368,14 +387,14 @@ fn prepare_view_cone_lights(
     mode: Res<RenderVolumetricLightingMode>,
     pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<ConeVolumePipeline>>,
-    pipeline: Res<ConeVolumePipeline>,
+    mut pipeline: ResMut<ConeVolumePipeline>,
     render_device: Res<RenderDevice>,
     mesh_assets: Res<RenderAssets<RenderMesh>>,
 ) {
     let raymarch = matches!(mode.0, VolumetricLightingMode::RaymarchCones);
     for (entity, view, depth_texture, msaa) in &views {
         let mut entity_commands = commands.entity(entity);
-        if !(raymarch && !cones.cones.is_empty()) {
+        if !raymarch || cones.cones.is_empty() {
             entity_commands.remove::<ViewConeRenderData>();
             continue;
         }
@@ -394,7 +413,10 @@ fn prepare_view_cone_lights(
             continue;
         };
 
+        pipeline.ensure_initialized(&render_device);
         let pipeline_ref = &*pipeline;
+        let resources = pipeline_ref.resources();
+
         let format = if view.hdr {
             ViewTarget::TEXTURE_FORMAT_HDR
         } else {
@@ -450,17 +472,16 @@ fn prepare_view_cone_lights(
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let shadow_view =
-            pipeline_ref
-                .fallback_shadow_texture
-                .create_view(&TextureViewDescriptor {
-                    dimension: Some(TextureViewDimension::D2Array),
-                    ..Default::default()
-                });
+        let shadow_view = resources
+            .fallback_shadow_texture
+            .create_view(&TextureViewDescriptor {
+                dimension: Some(TextureViewDimension::D2Array),
+                ..Default::default()
+            });
 
         let global_bind_group = render_device.create_bind_group(
             Some("cone_volume_global_bg"),
-            &pipeline_ref.global_layout,
+            &resources.global_layout,
             &[
                 BindGroupEntry {
                     binding: 0,
@@ -468,14 +489,14 @@ fn prepare_view_cone_lights(
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&pipeline_ref.fallback_shadow_sampler),
+                    resource: BindingResource::Sampler(&resources.fallback_shadow_sampler),
                 },
             ],
         );
 
         let view_bind_group = render_device.create_bind_group(
             Some("cone_volume_view_bg"),
-            &pipeline_ref.view_layout,
+            &resources.view_layout,
             &[
                 BindGroupEntry {
                     binding: 0,
@@ -490,7 +511,7 @@ fn prepare_view_cone_lights(
 
         let mut draws = Vec::new();
         for cone in &cones.cones {
-            let Some(_) = mesh_assets.get(&cone.mesh) else {
+            let Some(_render_mesh) = mesh_assets.get(&cone.mesh) else {
                 continue;
             };
 
@@ -520,7 +541,7 @@ fn prepare_view_cone_lights(
 
             let cone_bind_group = render_device.create_bind_group(
                 Some("cone_volume_cone_bg"),
-                &pipeline_ref.cone_layout,
+                &resources.cone_layout,
                 &[BindGroupEntry {
                     binding: 0,
                     resource: uniform_buffer.as_entire_binding(),
@@ -529,7 +550,7 @@ fn prepare_view_cone_lights(
 
             draws.push(ConeDraw {
                 bind_group: cone_bind_group,
-                uniform_buffer,
+                _uniform_buffer: uniform_buffer,
                 mesh: cone.mesh.clone(),
             });
         }
@@ -543,7 +564,7 @@ fn prepare_view_cone_lights(
             pipeline_id,
             global: global_bind_group,
             view: view_bind_group,
-            view_uniform: view_uniform_buffer,
+            _view_uniform: view_uniform_buffer,
             draws,
         });
     }
