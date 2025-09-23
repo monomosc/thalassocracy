@@ -1,4 +1,5 @@
 use bevy::color::{LinearRgba, Srgba};
+use bevy::core_pipeline::bloom::BloomPrefilter;
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSamplerDescriptor};
 use bevy::math::primitives::{Cuboid, Plane3d, Sphere};
 use bevy::math::{Affine2, Vec2};
@@ -517,7 +518,19 @@ pub fn spawn_greybox(
                 is_active: true,
                 ..Default::default()
             },
-            bevy::core_pipeline::bloom::Bloom::OLD_SCHOOL,
+            bevy::core_pipeline::bloom::Bloom {
+                intensity: 0.02,
+                low_frequency_boost: 0.7,
+                low_frequency_boost_curvature: 0.95,
+                high_pass_frequency: 1.0,
+                prefilter: BloomPrefilter {
+                    threshold: 0.6,
+                    threshold_softness: 0.2,
+                },
+                composite_mode: bevy::core_pipeline::bloom::BloomCompositeMode::Additive,
+                max_mip_dimension: 512,
+                scale: Vec2::ONE,
+            },
             bevy::core_pipeline::tonemapping::Tonemapping::TonyMcMapface,
             bevy::pbr::DistanceFog {
                 color: Color::srgb(0.04, 0.11, 0.12),

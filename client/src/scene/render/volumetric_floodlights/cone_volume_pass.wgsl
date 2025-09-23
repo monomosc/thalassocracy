@@ -1,16 +1,16 @@
 struct ViewUniform {
-    inv_view_proj: mat4x4<f32>;
-    view_proj: mat4x4<f32>;
-    camera_position: vec4<f32>;
-    screen_size: vec4<f32>;
+    inv_view_proj: mat4x4<f32>,
+    view_proj: mat4x4<f32>,
+    camera_position: vec4<f32>,
+    screen_size: vec4<f32>
 };
 
 struct ConeUniform {
-    model: mat4x4<f32>;
-    apex: vec4<f32>;
-    direction_range: vec4<f32>;
-    color_intensity: vec4<f32>;
-    angles: vec4<f32>;
+    model: mat4x4<f32>,
+    apex: vec4<f32>,
+    direction_range: vec4<f32>,
+    color_intensity: vec4<f32>,
+    angles: vec4<f32>
 };
 
 @group(0) @binding(0) var shadow_atlas: texture_depth_2d_array;
@@ -22,22 +22,18 @@ struct ConeUniform {
 @group(2) @binding(0) var<uniform> cone_uniform: ConeUniform;
 
 struct VertexInput {
-    @location(0) position: vec3<f32>;
+    @location(0) position: vec3<f32>,
 }
 
 struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>;
-    @location(0) world_position: vec3<f32>;
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) world_position: vec3<f32>,
+    @location(1) ndc_xy: vec2<f32>,
 };
 
 struct FragmentOutput {
-    @location(0) color: vec4<f32>;
+    @location(0) color: vec4<f32>,
 };
-
-fn ndc_from_position(position: vec2<f32>, inv_screen_size: vec2<f32>) -> vec2<f32> {
-    let uv = position * inv_screen_size;
-    return vec2<f32>(uv.x * 2.0 - 1.0, (1.0 - uv.y) * 2.0 - 1.0);
-}
 
 fn world_from_ndc(ndc: vec3<f32>) -> vec3<f32> {
     let clip = vec4<f32>(ndc, 1.0);
@@ -218,17 +214,16 @@ fn march_cone(
             continue;
         }
 
-        let radius_ratio = if radius_limit > 1e-4 {
-            sqrt(radial_sq) / radius_limit
-        } else {
-            0.0
-        };
+        var radius_ratio: f32 = 0.0;
+        if radius_limit > 1e-4 {
+            radius_ratio = sqrt(radial_sq) / radius_limit;
+        }
         let edge = 1.0 - smoothstep(0.8, 1.0, clamp(radius_ratio, 0.0, 1.0));
         let dir_to_point = normalize(rel);
         let spot = smoothstep(cos_outer_clamped, cos_inner_clamped, dot(dir_to_point, axis));
         let distance_falloff = 1.0 / (1.0 + axial * axial * 0.02);
 
-        let scatter = base_color * (light_intensity * distance_falloff * spot * edge * 4.0);
+        let scatter = base_color * (light_intensity * distance_falloff * spot * edge);
         accum += scatter * transmittance * dt;
 
         let extinction = sigma_a * dt;
@@ -246,24 +241,27 @@ fn vertex(@location(0) position: vec3<f32>) -> VertexOutput {
     let local = vec4<f32>(position, 1.0);
     let world = cone_uniform.model * local;
     let clip = view_uniform.view_proj * world;
-    return VertexOutput(clip, world.xyz / world.w);
+
+    var out: VertexOutput;
+    out.clip_position = clip;
+    out.world_position = world.xyz / world.w;
+    out.ndc_xy = clip.xy / clip.w;
+    return out;
 }
 
 @fragment
-fn fragment(
-    @builtin(position) position: vec4<f32>,
-    in: VertexOutput,
-) -> FragmentOutput {
-    let _ = textureDimensions(shadow_atlas);
-    let _ = shadow_sampler;
+fn fragment(in: VertexOutput) -> FragmentOutput {
+    let _tex_dims = textureDimensions(shadow_atlas);
+    let _shadow_sampler = shadow_sampler;
 
     let screen_size = view_uniform.screen_size.xy;
-    let inv_screen_size = view_uniform.screen_size.zw;
     if screen_size.x < 1.0 || screen_size.y < 1.0 {
         return FragmentOutput(vec4<f32>(0.0, 0.0, 0.0, 1.0));
     }
 
-    let ndc_xy = ndc_from_position(position.xy, inv_screen_size);
+    let ndc_xy = in.ndc_xy;
+    let uv = ndc_xy * 0.5 + vec2<f32>(0.5, 0.5);
+    let frag_coord = uv * screen_size;
     let camera_pos = view_uniform.camera_position.xyz;
     var ray_dir = in.world_position - camera_pos;
     let ray_length = length(ray_dir);
@@ -273,7 +271,7 @@ fn fragment(
     ray_dir = ray_dir / ray_length;
 
     let max_coord = screen_size - vec2<f32>(1.0, 1.0);
-    let clamped = clamp(position.xy, vec2<f32>(0.0, 0.0), max_coord);
+    let clamped = clamp(frag_coord, vec2<f32>(0.0, 0.0), max_coord);
     let pixel = vec2<i32>(clamped);
     let depth_sample = textureLoad(view_depth, pixel, 0);
 
@@ -290,3 +288,5 @@ fn fragment(
     let accum = march_cone(camera_pos, ray_dir, camera_depth);
     return FragmentOutput(vec4<f32>(accum, 1.0));
 }
+
+

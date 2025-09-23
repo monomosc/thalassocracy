@@ -3,6 +3,7 @@ use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::ecs::query::QueryItem;
 use bevy::pbr::SpotLight;
 use bevy::prelude::*;
+use bevy::render::render_resource::Face;
 use bevy::render::{
     camera::ExtractedCamera,
     mesh::{
@@ -26,7 +27,7 @@ use bevy::render::{
         TextureUsages, TextureViewDescriptor, TextureViewDimension, VertexState,
     },
     renderer::{RenderContext, RenderDevice},
-    view::{ExtractedView, Msaa, ViewDepthTexture, ViewTarget},
+    view::{ExtractedView, Msaa, ViewDepthTexture, ViewTarget, ViewVisibility},
     Extract, ExtractSchedule, Render, RenderApp, RenderSet,
 };
 use bytemuck::{Pod, Zeroable};
@@ -57,7 +58,7 @@ pub struct VolumetricLightingState {
 impl Default for VolumetricLightingState {
     fn default() -> Self {
         Self {
-            mode: VolumetricLightingMode::LegacyCones,
+            mode: VolumetricLightingMode::RaymarchCones,
         }
     }
 }
@@ -67,7 +68,7 @@ pub struct RenderVolumetricLightingMode(pub VolumetricLightingMode);
 
 impl Default for RenderVolumetricLightingMode {
     fn default() -> Self {
-        Self(VolumetricLightingMode::LegacyCones)
+        Self(VolumetricLightingMode::RaymarchCones)
     }
 }
 
@@ -246,13 +247,13 @@ impl SpecializedRenderPipeline for ConeVolumePipeline {
                 })],
             }),
             primitive: PrimitiveState {
-                cull_mode: None,
+                cull_mode: Some(Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(DepthStencilState {
                 format: TextureFormat::Depth32Float,
                 depth_write_enabled: false,
-                depth_compare: CompareFunction::LessEqual,
+                depth_compare: CompareFunction::GreaterEqual,
                 stencil: StencilState::default(),
                 bias: DepthBiasState::default(),
             }),
@@ -326,17 +327,37 @@ fn extract_volumetric_mode(mut commands: Commands, mode: Extract<Res<VolumetricL
 fn extract_cone_lights(
     mut commands: Commands,
     state: Extract<Res<VolumetricLightingState>>,
-    lights: Extract<Query<(Entity, &SpotLight, &GlobalTransform, Option<&Children>)>>,
-    cones_query: Extract<Query<(Entity, &GlobalTransform, &Mesh3d), With<VolumetricCone>>>,
+    lights: Extract<
+        Query<(
+            Entity,
+            &SpotLight,
+            &GlobalTransform,
+            Option<&Children>,
+            Option<&ViewVisibility>,
+        )>,
+    >,
+    cones_query: Extract<
+        Query<(Entity, &GlobalTransform, &Mesh3d, Option<&ViewVisibility>), With<VolumetricCone>>,
+    >,
 ) {
     let mut cones = Vec::new();
     if matches!(state.mode, VolumetricLightingMode::RaymarchCones) {
-        let mut cone_data: HashMap<Entity, (Handle<Mesh>, Mat4)> = HashMap::default();
-        for (entity, transform, mesh) in cones_query.iter() {
-            cone_data.insert(entity, (mesh.0.clone(), transform.compute_matrix()));
+        let mut cone_data: HashMap<Entity, (Handle<Mesh>, Mat4, bool)> = HashMap::default();
+        for (entity, transform, mesh, visibility) in cones_query.iter() {
+            let visible = visibility.map_or(true, |v| v.get());
+            cone_data.insert(
+                entity,
+                (mesh.0.clone(), transform.compute_matrix(), visible),
+            );
         }
 
-        for (entity, light, transform, children) in lights.iter() {
+        for (entity, light, transform, children, visibility) in lights.iter() {
+            if let Some(view_visibility) = visibility {
+                if !view_visibility.get() {
+                    continue;
+                }
+            }
+
             if light.range <= 0.1 {
                 continue;
             }
@@ -344,13 +365,16 @@ fn extract_cone_lights(
             let mut mesh_and_model = None;
             if let Some(children) = children {
                 for child in children.iter() {
-                    if let Some(data) = cone_data.get(&child) {
-                        mesh_and_model = Some(data.clone());
+                    if let Some((mesh, model, cone_visible)) = cone_data.get(&child) {
+                        mesh_and_model = Some((mesh.clone(), *model, *cone_visible));
                         break;
                     }
                 }
             }
-            let Some((mesh, model)) = mesh_and_model else {
+            let Some((mesh, model, cone_visible)) = mesh_and_model else {
+                continue;
+            };
+            if !cone_visible {
                 continue;
             };
 
@@ -627,10 +651,7 @@ impl ViewNode for FloodlightViewNode {
             color_attachments: &[Some(color_attachment)],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: depth_view,
-                depth_ops: Some(Operations {
-                    load: LoadOp::Load,
-                    store: StoreOp::Store,
-                }),
+                depth_ops: None,
                 stencil_ops: None,
             }),
             timestamp_writes: None,
@@ -778,7 +799,7 @@ fn spawn_mode_label(mut commands: Commands) {
             left: Val::Px(14.0),
             ..Default::default()
         },
-        Text::new("Volumetrics: legacy [V]"),
+        Text::new("Volumetrics: raymarch [V]"),
         TextFont {
             font_size: 14.0,
             ..Default::default()

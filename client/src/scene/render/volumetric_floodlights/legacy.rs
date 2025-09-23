@@ -66,30 +66,12 @@ pub struct VolumetricHalo;
 fn attach_or_update_volumetrics(
     mut commands: Commands,
     mut q_spot: Query<(Entity, &mut SpotLight, Option<&Children>)>,
-    mut q_cone: Query<
-        (
-            Entity,
-            &mut Transform,
-            &MeshMaterial3d<VolumetricConeMaterial>,
-        ),
-        (
-            With<VolumetricCone>,
-            Without<VolumetricHalo>,
-            Without<MeshMaterial3d<VolumetricConeDebugMaterial>>,
-        ),
+    mut q_cone_transform: Query<
+        (Entity, &mut Transform),
+        (With<VolumetricCone>, Without<VolumetricHalo>),
     >,
-    mut q_cone_dbg: Query<
-        (
-            Entity,
-            &mut Transform,
-            &MeshMaterial3d<VolumetricConeDebugMaterial>,
-        ),
-        (
-            With<VolumetricCone>,
-            Without<VolumetricHalo>,
-            Without<MeshMaterial3d<VolumetricConeMaterial>>,
-        ),
-    >,
+    q_cone_legacy: Query<&MeshMaterial3d<VolumetricConeMaterial>, With<VolumetricCone>>,
+    q_cone_debug: Query<&MeshMaterial3d<VolumetricConeDebugMaterial>, With<VolumetricCone>>,
     mut _q_point: Query<(Entity, &PointLight, Option<&Children>)>,
     mut q_halo: Query<(Entity, &mut Transform), (With<VolumetricHalo>, Without<VolumetricCone>)>,
     assets: Res<VolumetricConeAssets>,
@@ -106,8 +88,8 @@ fn attach_or_update_volumetrics(
         for (e, _light, _) in &mut q_spot {
             commands.entity(e).remove::<VolumetricLight>();
         }
-        for (e, _, _) in &mut q_cone {
-            commands.entity(e).despawn();
+        for (entity, _) in q_cone_transform.iter_mut() {
+            commands.entity(entity).despawn();
         }
         for (e, _) in &mut q_halo {
             commands.entity(e).despawn();
@@ -121,10 +103,6 @@ fn attach_or_update_volumetrics(
     let Some(legacy_handle) = assets.legacy_material.clone() else {
         return;
     };
-    let Some(debug_handle) = assets.debug_material.clone() else {
-        return;
-    };
-
     let raymarch_mode = matches!(state.mode, VolumetricLightingMode::RaymarchCones);
 
     for (e, mut light, children) in &mut q_spot {
@@ -132,7 +110,7 @@ fn attach_or_update_volumetrics(
             commands.entity(e).remove::<VolumetricLight>();
             if let Some(children) = children {
                 for child in children.iter() {
-                    if q_cone.get_mut(child).is_ok() {
+                    if q_cone_transform.get_mut(child).is_ok() {
                         commands.entity(child).despawn();
                     }
                 }
@@ -146,175 +124,144 @@ fn attach_or_update_volumetrics(
             .with_scale(Vec3::new(radius, radius, height));
 
         if raymarch_mode {
-            light.shadows_enabled = false;
             commands.entity(e).remove::<VolumetricLight>();
+            light.shadows_enabled = true;
 
-            let mut found = None;
+            let mut have_cone = false;
             if let Some(children) = children {
                 for child in children.iter() {
-                    if q_cone_dbg.get_mut(child).is_ok() || q_cone.get_mut(child).is_ok() {
-                        found = Some(child);
-                        break;
+                    {
+                        let Ok((_, mut transform)) = q_cone_transform.get_mut(child) else {
+                            continue;
+                        };
+                        *transform = cone_t;
                     }
-                }
-            }
 
-            match found {
-                Some(child) => {
-                    commands
-                        .entity(child)
-                        .remove::<MeshMaterial3d<VolumetricConeMaterial>>()
-                        .insert(MeshMaterial3d(debug_handle.clone()));
-                    if let Ok((_e, mut t, _)) = q_cone_dbg.get_mut(child) {
-                        *t = cone_t;
+                    if q_cone_legacy.get(child).is_ok() {
+                        commands
+                            .entity(child)
+                            .remove::<MeshMaterial3d<VolumetricConeMaterial>>();
                     }
-                    if let Ok((_e, mut t, _)) = q_cone.get_mut(child) {
-                        *t = cone_t;
+                    if q_cone_debug.get(child).is_ok() {
+                        commands
+                            .entity(child)
+                            .remove::<MeshMaterial3d<VolumetricConeDebugMaterial>>()
+                            .insert(Name::new("VolumetricCone"));
                     }
-                }
-                None => {
-                    let id = commands
-                        .spawn((
-                            Mesh3d(base_mesh.clone()),
-                            MeshMaterial3d(debug_handle.clone()),
-                            cone_t,
-                            GlobalTransform::default(),
-                            VolumetricCone,
-                            NotShadowCaster,
-                            Name::new("VolumetricConeDebug"),
-                        ))
-                        .id();
-                    commands.entity(id).insert(ChildOf(e));
-                }
-            }
-            continue;
-        }
-
-        commands.entity(e).remove::<VolumetricLight>();
-
-        let mut found = None;
-        if let Some(children) = children {
-            for child in children.iter() {
-                if q_cone.get_mut(child).is_ok() || q_cone_dbg.get_mut(child).is_ok() {
-                    found = Some(child);
+                    have_cone = true;
                     break;
                 }
             }
-        }
 
-        match found {
-            Some(child) => {
-                commands
-                    .entity(child)
-                    .remove::<MeshMaterial3d<VolumetricConeDebugMaterial>>()
-                    .insert(MeshMaterial3d(legacy_handle.clone()));
-                if let Ok((_e, mut t, _)) = q_cone.get_mut(child) {
-                    *t = cone_t;
-                }
-                if let Ok((_e, mut t, _)) = q_cone_dbg.get_mut(child) {
-                    *t = cone_t;
-                }
-            }
-            None => {
+            if !have_cone {
                 let id = commands
                     .spawn((
                         Mesh3d(base_mesh.clone()),
-                        MeshMaterial3d(legacy_handle.clone()),
                         cone_t,
                         GlobalTransform::default(),
                         VolumetricCone,
                         NotShadowCaster,
                         Name::new("VolumetricCone"),
+                        Visibility::Inherited,
                     ))
                     .id();
                 commands.entity(id).insert(ChildOf(e));
             }
+
+            continue;
         }
 
-        let mut cone_entity = None;
+        commands.entity(e).remove::<VolumetricLight>();
+        light.shadows_enabled = false;
+
+        let mut material_handle: Option<Handle<VolumetricConeMaterial>> = None;
+
         if let Some(children) = children {
             for child in children.iter() {
-                if q_cone.get_mut(child).is_ok() {
-                    cone_entity = Some(child);
-                    break;
+                {
+                    let Ok((_, mut transform)) = q_cone_transform.get_mut(child) else {
+                        continue;
+                    };
+                    *transform = cone_t;
                 }
+
+                if q_cone_debug.get(child).is_ok() {
+                    commands
+                        .entity(child)
+                        .remove::<MeshMaterial3d<VolumetricConeDebugMaterial>>();
+                }
+
+                let handle = match q_cone_legacy.get(child) {
+                    Ok(mat) => mat.0.clone(),
+                    Err(_) => {
+                        let handle = legacy_handle.clone();
+                        commands
+                            .entity(child)
+                            .insert(MeshMaterial3d(handle.clone()));
+                        handle
+                    }
+                };
+
+                commands.entity(child).insert(Visibility::Inherited);
+                material_handle = Some(handle);
+                break;
             }
+        }
+
+        if material_handle.is_none() {
+            let new_handle = if let Some(base) = cone_mats.get(&legacy_handle).cloned() {
+                cone_mats.add(base)
+            } else {
+                cone_mats.add(VolumetricConeMaterial::default())
+            };
+
+            let id = commands
+                .spawn((
+                    Mesh3d(base_mesh.clone()),
+                    MeshMaterial3d(new_handle.clone()),
+                    cone_t,
+                    GlobalTransform::default(),
+                    VolumetricCone,
+                    NotShadowCaster,
+                    Name::new("VolumetricCone"),
+                    Visibility::Inherited,
+                ))
+                .id();
+            commands.entity(id).insert(ChildOf(e));
+
+            material_handle = Some(new_handle);
         }
 
         let intensity = light.intensity.max(0.0);
         let emissive_boost = (intensity / 10_000_000.0).powf(0.75).clamp(0.02, 600.0);
         let alpha_scale = (intensity / 100_000.0).powf(0.5).clamp(0.01, 0.95);
 
-        match cone_entity {
-            Some(entity) => {
-                if let Ok((_e, _, mat_handle)) = q_cone.get_mut(entity) {
-                    let base_alpha = if let Some(base) = cone_mats.get(&legacy_handle) {
-                        base.color.alpha
-                    } else if let Some(current) = cone_mats.get(&**mat_handle) {
-                        current.color.alpha
-                    } else {
-                        VolumetricConeMaterial::default().color.alpha
-                    };
+        if let Some(mat_handle) = material_handle {
+            let base_alpha = if let Some(base) = cone_mats.get(&legacy_handle) {
+                base.color.alpha
+            } else if let Some(current) = cone_mats.get(&mat_handle) {
+                current.color.alpha
+            } else {
+                VolumetricConeMaterial::default().color.alpha
+            };
 
-                    let mut seed = e.index() ^ 0x9E37_79B9;
-                    let mut frand = || {
-                        seed ^= seed << 13;
-                        seed ^= seed >> 17;
-                        seed ^= seed << 5;
-                        seed as f32 / u32::MAX as f32
-                    };
-                    let phase_low = frand() * std::f32::consts::TAU;
-                    let phase_mid = frand() * std::f32::consts::TAU;
-                    let phase_high = frand() * std::f32::consts::TAU;
+            let mut seed = e.index() ^ 0x9E37_79B9;
+            let mut frand = || {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                seed as f32 / u32::MAX as f32
+            };
+            let phase_low = frand() * std::f32::consts::TAU;
+            let phase_mid = frand() * std::f32::consts::TAU;
+            let phase_high = frand() * std::f32::consts::TAU;
 
-                    if let Some(material) = cone_mats.get_mut(&**mat_handle) {
-                        material.color.alpha = (base_alpha * alpha_scale).clamp(0.0, 1.0);
-                        material.hdr_params.x = emissive_boost;
-                        if material.flicker_phases == Vec4::ZERO {
-                            material.flicker_phases =
-                                Vec4::new(phase_low, phase_mid, phase_high, 0.0);
-                        }
-                    }
+            if let Some(material) = cone_mats.get_mut(&mat_handle) {
+                material.color.alpha = (base_alpha * alpha_scale).clamp(0.0, 1.0);
+                material.hdr_params.x = emissive_boost;
+                if material.flicker_phases == Vec4::ZERO {
+                    material.flicker_phases = Vec4::new(phase_low, phase_mid, phase_high, 0.0);
                 }
-            }
-            None => {
-                let mut seed = e.index() ^ 0x9E37_79B9;
-                let mut frand = || {
-                    seed ^= seed << 13;
-                    seed ^= seed >> 17;
-                    seed ^= seed << 5;
-                    seed as f32 / u32::MAX as f32
-                };
-                let phase_low = frand() * std::f32::consts::TAU;
-                let phase_mid = frand() * std::f32::consts::TAU;
-                let phase_high = frand() * std::f32::consts::TAU;
-
-                let new_handle = if let Some(base) = cone_mats.get(&legacy_handle).cloned() {
-                    let mut material = base;
-                    material.color.alpha = (material.color.alpha * alpha_scale).clamp(0.0, 1.0);
-                    material.hdr_params.x = emissive_boost;
-                    material.flicker_phases = Vec4::new(phase_low, phase_mid, phase_high, 0.0);
-                    cone_mats.add(material)
-                } else {
-                    let mut material = VolumetricConeMaterial::default();
-                    material.color.alpha = (material.color.alpha * alpha_scale).clamp(0.0, 1.0);
-                    material.hdr_params.x = emissive_boost;
-                    material.flicker_phases = Vec4::new(phase_low, phase_mid, phase_high, 0.0);
-                    cone_mats.add(material)
-                };
-
-                let id = commands
-                    .spawn((
-                        Mesh3d(base_mesh.clone()),
-                        MeshMaterial3d(new_handle),
-                        cone_t,
-                        GlobalTransform::default(),
-                        VolumetricCone,
-                        NotShadowCaster,
-                        Name::new("VolumetricCone"),
-                    ))
-                    .id();
-                commands.entity(id).insert(ChildOf(e));
             }
         }
     }
