@@ -162,3 +162,14 @@ Use `inside` to pick the cull-mode pipeline.
 - **Mesh tessellation**: 32–64 slices are enough; don’t overdo.
 
 ---
+
+## Implementation Notes (Sep 2025)
+
+- ? Custom render phase, cone extraction, adaptive march, and debug overlays (modes 0�5) are implemented.  
+  The shader now tolerates near-tangent rays, removing the speckle artefact we fought for a week.  
+  Depth clamp can be toggled for debugging; proxy cones are kept out of forward passes via material stripping.
+- ? **Shadow atlas sampling** is not wired yet, so cones are still unshadowed.  
+  When adding it, bias/filter the projection to avoid new binary artefacts.
+- ? **Post filtering / temporal accumulation** remains future work.  
+  If we need softer beams, plan a bilateral blur or history buffer once shadows are in.
+

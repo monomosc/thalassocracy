@@ -1,3 +1,4 @@
+use crate::render_settings::{RenderSettings, VolumetricConeShaderDebugSettings};
 use bevy::asset::load_internal_asset;
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::ecs::query::QueryItem;
@@ -70,6 +71,24 @@ impl Default for RenderVolumetricLightingMode {
     fn default() -> Self {
         Self(VolumetricLightingMode::RaymarchCones)
     }
+}
+
+#[derive(Resource, Clone, Copy, Debug)]
+struct ExtractedVolumetricSettings {
+    scatter_strength: f32,
+}
+
+impl Default for ExtractedVolumetricSettings {
+    fn default() -> Self {
+        Self {
+            scatter_strength: 0.02,
+        }
+    }
+}
+
+#[derive(Resource, Clone, Copy, Debug, Default)]
+struct ExtractedVolumetricDebugSettings {
+    debug_mode: u32,
 }
 
 #[derive(Resource, Default)]
@@ -308,6 +327,7 @@ struct ConeVolumeViewUniform {
     view_proj: Mat4,
     camera_position: Vec4,
     screen_size: Vec4,
+    params: Vec4,
 }
 
 #[repr(C)]
@@ -322,6 +342,25 @@ struct ConeVolumePerConeUniform {
 
 fn extract_volumetric_mode(mut commands: Commands, mode: Extract<Res<VolumetricLightingState>>) {
     commands.insert_resource(RenderVolumetricLightingMode(mode.mode));
+}
+
+fn extract_volumetric_settings(mut commands: Commands, settings: Extract<Res<RenderSettings>>) {
+    debug_assert!(
+        settings.volumetric_cone_intensity.is_finite(),
+        "volumetric_cone_intensity is not finite"
+    );
+    commands.insert_resource(ExtractedVolumetricSettings {
+        scatter_strength: settings.volumetric_cone_intensity,
+    });
+}
+
+fn extract_volumetric_debug_settings(
+    mut commands: Commands,
+    settings: Extract<Res<VolumetricConeShaderDebugSettings>>,
+) {
+    commands.insert_resource(ExtractedVolumetricDebugSettings {
+        debug_mode: settings.debug_mode,
+    });
 }
 
 fn extract_cone_lights(
@@ -358,6 +397,16 @@ fn extract_cone_lights(
                 }
             }
 
+            debug_assert!(
+                light.range.is_finite(),
+                "SpotLight {:?} has non-finite range",
+                entity
+            );
+            debug_assert!(
+                light.intensity.is_finite(),
+                "SpotLight {:?} has non-finite intensity",
+                entity
+            );
             if light.range <= 0.1 {
                 continue;
             }
@@ -380,6 +429,27 @@ fn extract_cone_lights(
 
             let world_transform = transform.compute_transform();
             let direction = (world_transform.rotation * Vec3::NEG_Z).normalize_or_zero();
+            debug_assert!(
+                direction.length_squared() > 0.0,
+                "SpotLight {:?} produced zero direction",
+                entity
+            );
+            debug_assert!(
+                (direction.length_squared() - 1.0).abs() < 1e-3,
+                "SpotLight {:?} direction not normalized: {:?}",
+                entity,
+                direction
+            );
+
+            let cos_inner = light.inner_angle.cos();
+            let cos_outer = light.outer_angle.cos();
+            debug_assert!(
+                cos_inner >= cos_outer - 1e-3,
+                "SpotLight {:?} inner angle >= outer angle violated: cos_inner={:?}, cos_outer={:?}",
+                entity,
+                cos_inner,
+                cos_outer
+            );
 
             cones.push(RenderConeLight {
                 light_entity: entity,
@@ -388,8 +458,8 @@ fn extract_cone_lights(
                 range: light.range,
                 intensity: light.intensity,
                 color: light.color.into(),
-                cos_inner: light.inner_angle.cos(),
-                cos_outer: light.outer_angle.cos(),
+                cos_inner,
+                cos_outer,
                 mesh,
                 model,
             });
@@ -409,6 +479,8 @@ fn prepare_view_cone_lights(
     )>,
     cones: Res<ExtractedConeLights>,
     mode: Res<RenderVolumetricLightingMode>,
+    settings: Res<ExtractedVolumetricSettings>,
+    debug: Res<ExtractedVolumetricDebugSettings>,
     pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<ConeVolumePipeline>>,
     mut pipeline: ResMut<ConeVolumePipeline>,
@@ -464,6 +536,8 @@ fn prepare_view_cone_lights(
         let viewport = view.viewport;
         let screen_width = viewport.z.max(1) as f32;
         let screen_height = viewport.w.max(1) as f32;
+        debug_assert!(screen_width.is_finite() && screen_width > 0.0);
+        debug_assert!(screen_height.is_finite() && screen_height > 0.0);
         let inv_screen_width = if screen_width > 0.0 {
             1.0 / screen_width
         } else {
@@ -489,6 +563,7 @@ fn prepare_view_cone_lights(
                 inv_screen_width,
                 inv_screen_height,
             ),
+            params: Vec4::new(settings.scatter_strength, debug.debug_mode as f32, 0.0, 0.0),
         };
         let view_uniform_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("cone_volume_view_uniform"),
@@ -538,6 +613,28 @@ fn prepare_view_cone_lights(
             let Some(_render_mesh) = mesh_assets.get(&cone.mesh) else {
                 continue;
             };
+
+            debug_assert!(
+                cone.range.is_finite() && cone.range > 0.0,
+                "Cone range invalid: {:?}",
+                cone.range
+            );
+            debug_assert!(
+                cone.intensity.is_finite() && cone.intensity >= 0.0,
+                "Cone intensity invalid: {:?}",
+                cone.intensity
+            );
+            debug_assert!(
+                (cone.direction.length_squared() - 1.0).abs() < 1e-3,
+                "Cone direction not normalized: {:?}",
+                cone.direction
+            );
+            debug_assert!(
+                cone.cos_inner >= cone.cos_outer - 1e-3,
+                "Cone cos_inner < cos_outer: {:?} < {:?}",
+                cone.cos_inner,
+                cone.cos_outer
+            );
 
             let cone_uniform = ConeVolumePerConeUniform {
                 model: cone.model,
@@ -747,10 +844,20 @@ impl Plugin for VolumetricFloodlightsPlugin {
                 .init_resource::<ConeVolumePipeline>()
                 .init_resource::<SpecializedRenderPipelines<ConeVolumePipeline>>()
                 .init_resource::<ExtractedConeLights>()
+                .init_resource::<ExtractedVolumetricSettings>()
+                .init_resource::<ExtractedVolumetricDebugSettings>()
                 .add_systems(ExtractSchedule, extract_volumetric_mode)
                 .add_systems(
                     ExtractSchedule,
-                    extract_cone_lights.after(extract_volumetric_mode),
+                    extract_volumetric_settings.after(extract_volumetric_mode),
+                )
+                .add_systems(
+                    ExtractSchedule,
+                    extract_volumetric_debug_settings.after(extract_volumetric_settings),
+                )
+                .add_systems(
+                    ExtractSchedule,
+                    extract_cone_lights.after(extract_volumetric_debug_settings),
                 )
                 .add_systems(Render, prepare_view_cone_lights.in_set(RenderSet::Queue))
                 .add_render_graph_node::<ViewNodeRunner<FloodlightViewNode>>(

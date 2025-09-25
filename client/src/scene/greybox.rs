@@ -465,7 +465,7 @@ pub fn spawn_greybox(
                 SpotLight {
                     color: Color::srgb(1.0, 1.0, 1.0),
                     intensity: 1_200_000_000.0, // brighter for longer throw
-                    range: 600.0,
+                    range: 100.0,
                     inner_angle: 0.04,
                     outer_angle: 0.08,
                     shadows_enabled: true,
