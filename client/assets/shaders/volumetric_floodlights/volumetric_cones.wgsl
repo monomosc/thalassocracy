@@ -14,6 +14,24 @@ struct ConeUniform {
     angles: vec4<f32>                // x: cos_inner, y: cos_outer
 };
 
+struct GpuFog {
+    /// Fog color
+    base_color: vec4<f32>,
+    /// The color used for the fog where the view direction aligns with directional lights
+    directional_light_color: vec4<f32>,
+    /// Allocated differently depending on fog mode.
+    /// See `mesh_view_types.wgsl` for a detailed explanation
+    be: vec3<f32>,
+    /// The exponent applied to the directional light alignment calculation
+    directional_light_exponent: f32,
+    /// Allocated differently depending on fog mode.
+    /// See `mesh_view_types.wgsl` for a detailed explanation
+    bi: vec3<f32>,
+    /// Unsigned int representation of the active fog falloff mode
+    mode: u32,
+}
+
+
 // Derived cone parameters used throughout the shader.
 struct ConeParams {
     apex: vec3<f32>,   // world-space apex of the cone
@@ -32,6 +50,8 @@ struct ConeParams {
 @group(1) @binding(1) var view_depth: texture_depth_2d;
 
 @group(2) @binding(0) var<uniform> cone_uniform: ConeUniform;
+
+@group(3) @binding(0) var<uniform> fog: GpuFog;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

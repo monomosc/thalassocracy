@@ -1,12 +1,10 @@
-use bevy::asset::Handle;
 use bevy::pbr::Material;
-use bevy::prelude::Shader;
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 
 // Custom unlit material for volumetric spot light cones.
 // Features:
-// - Distance falloff along cone (via mesh V coordinate: apex v=1 → base v=0)
+// - Distance falloff along cone (via mesh V coordinate: apex v=1 -> base v=0)
 // - Configurable per-channel absorption (e.g., absorb more red)
 // - View-angle brightening (simple Fresnel-like term)
 // - 3D noise modulation (world-space) to break up smoothness
@@ -70,7 +68,7 @@ impl Default for VolumetricConeMaterial {
 
 impl Material for VolumetricConeMaterial {
     fn fragment_shader() -> ShaderRef {
-        VOLUMETRIC_CONE_SHADER_HANDLE.into()
+        ShaderRef::Path(VOLUMETRIC_CONE_SHADER_PATH.into())
     }
 
     fn alpha_mode(&self) -> AlphaMode {
@@ -95,7 +93,5 @@ impl Material for VolumetricConeMaterial {
     }
 }
 
-// Public shader handle so the app can register it via load_internal_asset!
-#[allow(deprecated)]
-pub const VOLUMETRIC_CONE_SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(0x8a2e_5b11_c3d4_49c7_9b5e_3dd6_f4a1_55b1);
+pub const VOLUMETRIC_CONE_SHADER_PATH: &str =
+    "shaders/volumetric_floodlights/volumetric_cone_material.wgsl";

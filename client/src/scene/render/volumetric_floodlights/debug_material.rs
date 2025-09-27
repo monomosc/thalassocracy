@@ -1,4 +1,3 @@
-use bevy::asset::Handle;
 use bevy::core_pipeline::core_3d::CORE_3D_DEPTH_FORMAT;
 use bevy::pbr::Material;
 use bevy::prelude::*;
@@ -26,7 +25,7 @@ impl Default for VolumetricConeDebugMaterial {
 
 impl Material for VolumetricConeDebugMaterial {
     fn fragment_shader() -> ShaderRef {
-        VOLUMETRIC_CONE_DEBUG_SHADER_HANDLE.into()
+        ShaderRef::Path(VOLUMETRIC_CONE_DEBUG_SHADER_PATH.into())
     }
     fn alpha_mode(&self) -> AlphaMode {
         self.alpha_mode
@@ -52,6 +51,5 @@ impl Material for VolumetricConeDebugMaterial {
     }
 }
 
-#[allow(deprecated)]
-pub const VOLUMETRIC_CONE_DEBUG_SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(0x9dd1_22f3_7a44_4e22_9b70_1234_abcd_0002);
+pub const VOLUMETRIC_CONE_DEBUG_SHADER_PATH: &str =
+    "shaders/volumetric_floodlights/cone_debug.wgsl";

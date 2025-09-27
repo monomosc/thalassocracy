@@ -163,6 +163,14 @@ Use `inside` to pick the cull-mode pipeline.
 
 ---
 
+## Runtime Tuning
+
+`RenderSettings` exposes the key cone parameters in the in-game inspector:
+- `volumetric_cone_intensity` scales the overall scatter strength.
+- `volumetric_cone_distance_falloff` controls how quickly beams fade with distance along the cone.
+- `volumetric_cone_angular_softness` adjusts the softness of the outer cone edge.
+- `volumetric_cone_extinction` raises or lowers the fog extinction used during ray marching.
+- If the active camera has a `DistanceFog`, its falloff profile (linear / exponential / exponential squared) modulates beam attenuation so cones fade alongside scene fog.
 ## Implementation Notes (Sep 2025)
 
 - ? Custom render phase, cone extraction, adaptive march, and debug overlays (modes 0–5) are implemented.  
@@ -172,4 +180,9 @@ Use `inside` to pick the cull-mode pipeline.
   When adding it, bias/filter the projection to avoid new binary artefacts.
 - ? **Post filtering / temporal accumulation** remains future work.  
   If we need softer beams, plan a bilateral blur or history buffer once shadows are in.
+
+
+
+
+
 
