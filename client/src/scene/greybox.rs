@@ -1,3 +1,4 @@
+use bevy::asset::ron::de;
 use bevy::color::{LinearRgba, Srgba};
 use bevy::core_pipeline::bloom::BloomPrefilter;
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSamplerDescriptor};
@@ -171,6 +172,17 @@ pub fn spawn_greybox(
                 });
             },
         );
+        /*
+        let tex_roughness: Handle<Image> = asset_server.load_with_settings(
+            "textures/rock_face_03_nor_gl_4k.exr", |settings: &mut ImageLoaderSettings| {
+                settings.sampler = bevy::image::ImageSampler::Descriptor(ImageSamplerDescriptor { 
+                    address_mode_u: ImageAddressMode::Repeat,
+                    address_mode_v: ImageAddressMode::Repeat,
+                    address_mode_w: ImageAddressMode::Repeat,
+                    ..default()
+                });
+            },
+        );*/
 
         // Helper to build a material with custom UV tiling and optional flips
         let mut make_mat = |repeats: Vec2, flip_x: bool, flip_y: bool| {
@@ -184,6 +196,7 @@ pub fn spawn_greybox(
             materials.add(StandardMaterial {
                 base_color: Color::WHITE,
                 base_color_texture: Some(tex_albedo.clone()),
+                //normal_map_texture: Some(tex_roughness.clone()),
                 metallic: 0.1,
                 perceptual_roughness: 0.95,
                 // Ensure interior faces render correctly when viewed from inside the tunnel
