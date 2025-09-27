@@ -144,7 +144,7 @@ impl ConeVolumePipeline {
         let fog_layout = device.create_bind_group_layout(
             Some("gpu_fog_layout"),
             &[BindGroupLayoutEntry {
-                binding: 2,
+                binding: 0,
                 visibility: ShaderStages::FRAGMENT,
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Uniform,
@@ -456,7 +456,7 @@ pub(super) fn prepare_view_cone_lights(
                 Some("cone_fog_bind_group"),
                 &resources.fog_layout,
                 &[BindGroupEntry {
-                    binding: 2,
+                    binding: 0,
                     resource: fog_meta.gpu_fogs.binding().unwrap(),
                 }],
             )

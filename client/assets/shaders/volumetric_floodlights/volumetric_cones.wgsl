@@ -74,6 +74,30 @@ fn world_from_ndc(ndc: vec3<f32>) -> vec3<f32> {
     return world.xyz / world.w;
 }
 
+// reduces light based on fog
+fn fog_transmittance_from_light(d: f32, fog: GpuFog) -> f32 {
+    // Returns T_light in [0..1], where 1 = no attenuation, 0 = fully attenuated.
+    switch fog.mode {
+        case 0u: { // linear: bi.x=start, be.x=end
+            let start = fog.bi.x;
+            let end   = fog.be.x;
+            let denom = max(end - start, 1e-6);
+            let t = clamp((d - start) / denom, 0.0, 1.0);  // fog amount
+            return 1.0 - t; // transmittance = 1 - fog amount
+        }
+        case 1u: { // exponential: be.x = density
+            let density = fog.be.x;
+            return exp(-density * d);
+        }
+        case 2u: { // exponential^2: be.x = density
+            let density = fog.be.x;
+            let x = density * d;
+            return exp(-(x * x));
+        }
+        default: { return 1.0; }
+    }
+}
+
 // Fetch the minimum depth value around the current pixel (2x2 footprint).
 // This gives us a conservative clamp when comparing against main-scene geometry.
 fn sample_depth_min(frag_coord: vec2<f32>, screen_size: vec2<f32>) -> f32 {
@@ -316,13 +340,18 @@ fn march_cone(
                 radial_weight = one_minus * one_minus;
             }
         }
+        
+        let d_light = length(rel);
+
+        //distance from lightsource by fog
+        let t_light = fog_transmittance_from_light(d_light, fog);
 
         let distance_falloff = 1.0 / (1.0 + axial * axial * 0.12);
         let weight = angular_weight * radial_weight;
         weight_sum += weight;
 
         let scatter = base_color
-            * (light_intensity * distance_falloff * weight * scatter_strength * raw_length_ratio);
+            * (light_intensity * distance_falloff * weight * scatter_strength * raw_length_ratio * t_light);
         accum += scatter * transmittance * dt;
 
         let extinction = sigma_a * dt;

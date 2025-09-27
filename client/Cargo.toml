@@ -19,6 +19,7 @@ bevy = { version = "0.16", default-features = false, features = [
     "exr",
     "tonemapping_luts",
     "default_font",
+    "file_watcher",
 ] }
 bevy_renet = "2.0.0"
 protocol = { path = "../protocol" }
