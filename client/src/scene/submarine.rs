@@ -1,3 +1,4 @@
+use bevy::animation::{animated_field, AnimationTarget, AnimationTargetId};
 use bevy::prelude::*;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
@@ -318,4 +319,48 @@ pub fn make_rudder_prism_mesh(length: f32, height: f32, thickness: f32) -> Mesh 
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_indices(Indices::U32(indices));
     mesh
+}
+
+
+const SWIVEL_PERIOD: f32 = 4.0f32;
+const SWIVEL_DEG: f32 = 15.0f32;
+const SAMPLES: u32 = 40;
+
+pub fn make_swivel_clip(commands: &mut Commands, light_entity: Entity, name: &Name, mut clips: ResMut<Assets<AnimationClip>>, mut graphs: ResMut<Assets<AnimationGraph>>) {
+    
+    let mut clip = AnimationClip::default();
+
+    let correction = Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2);
+
+    let data = (0..=SAMPLES).map(|i| {
+        let t = i as f32 / SAMPLES as f32 * SWIVEL_PERIOD;
+        // sine goes -1..+1, scale to angle range
+        let angle = (t / SWIVEL_PERIOD * std::f32::consts::TAU).sin() * SWIVEL_DEG.to_radians();
+        let quat = correction * Quat::from_rotation_y(angle);
+        (t, quat)
+    });
+
+    let target_id = AnimationTargetId::from_name(name);
+
+    clip.add_curve_to_target(
+        target_id,
+        AnimatableCurve::new(
+            animated_field!(Transform::rotation),
+            UnevenSampleAutoCurve::new(data).expect("valid quat curve"),
+        ),
+    );
+
+
+        // Turn the clip into a graph and set it to repeat when played
+    let (graph, node_index) = AnimationGraph::from_clip(clips.add(clip));
+    let graph_handle = graphs.add(graph);
+
+    let mut player = AnimationPlayer::default();
+    player.play(node_index).repeat();
+
+    commands.entity(light_entity)
+    .insert(AnimationGraphHandle(graph_handle))
+    .insert(player)
+    .insert(AnimationTarget { id: target_id, player: light_entity });
+
 }

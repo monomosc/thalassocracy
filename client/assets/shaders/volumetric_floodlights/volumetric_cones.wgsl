@@ -74,6 +74,19 @@ fn world_from_ndc(ndc: vec3<f32>) -> vec3<f32> {
     return world.xyz / world.w;
 }
 
+fn hg_phase(cos_theta: f32, g: f32) -> f32 {
+    let g2 = g * g;
+    // 1 / (4π) normalizing constant for phase functions
+    let norm = 1.0 / (4.0 * 3.14159265);
+    return norm * (1.0 - g2) / pow(1.0 + g2 - 2.0 * g * cos_theta, 1.5);
+}
+
+fn artistic_phase(cos_theta: f32, sharpness: f32) -> f32 {
+    // cos_theta=1 → forward, cos_theta=0 → side
+    let side_factor = pow(1.0 - cos_theta, sharpness);
+    return side_factor;
+}
+
 // reduces light based on fog
 fn fog_transmittance_from_light(d: f32, fog: GpuFog) -> f32 {
     // Returns T_light in [0..1], where 1 = no attenuation, 0 = fully attenuated.
@@ -343,15 +356,21 @@ fn march_cone(
         
         let d_light = length(rel);
 
-        //distance from lightsource by fog
+        //light loss from distance
         let t_light = fog_transmittance_from_light(d_light, fog);
+        // view direction cosine to cone direction
+        let L =normalize(-rel);
+        let V = normalize(camera_pos - sample_pos);
+        let cos_theta = dot(L, V);
+        let phase = artistic_phase(cos_theta, 2.0); //High g for seawater
+
 
         let distance_falloff = 1.0 / (1.0 + axial * axial * 0.12);
         let weight = angular_weight * radial_weight;
         weight_sum += weight;
 
         let scatter = base_color
-            * (light_intensity * distance_falloff * weight * scatter_strength * raw_length_ratio * t_light);
+            * (light_intensity * distance_falloff * weight * scatter_strength * raw_length_ratio * t_light) * phase;
         accum += scatter * transmittance * dt;
 
         let extinction = sigma_a * dt;

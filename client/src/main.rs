@@ -62,7 +62,7 @@ fn main() -> Result<()> {
     if args.headless {
         app.add_plugins(MinimalPlugins);
     } else {
-        app.add_plugins(
+        app.add_plugins((
             DefaultPlugins
                 .set(AssetPlugin {
                     file_path: "assets".into(), // path is relative to the client-crate
@@ -81,7 +81,7 @@ fn main() -> Result<()> {
                     }),
                     ..Default::default()
                 }),
-        );
+        ));
         #[cfg(feature = "windowing")]
         {
             use bevy_inspector_egui::bevy_egui::EguiPlugin;

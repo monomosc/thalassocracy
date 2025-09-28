@@ -1,3 +1,4 @@
+use bevy::animation::{AnimationTarget, AnimationTargetId};
 use bevy::asset::ron::de;
 use bevy::color::{LinearRgba, Srgba};
 use bevy::core_pipeline::bloom::BloomPrefilter;
@@ -9,6 +10,8 @@ use bevy::prelude::*;
 
 use levels::subspecs::small_skiff_spec;
 use levels::{builtins::greybox_level, LevelSpec, Vec3f};
+
+use crate::scene::submarine::make_swivel_clip;
 
 use super::camera::{CamMode, FollowCam, FollowCamState, FreeFlyState, GameCamera};
 use super::flow_field::{FlowField, Tunnel, TunnelBounds};
@@ -37,6 +40,8 @@ pub fn spawn_greybox(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
     proc_tex: Option<Res<ProcTexAssets>>,
+    mut clips: ResMut<Assets<AnimationClip>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
     // Convert helpers
     fn v(v: Vec3f) -> Vec3 {
@@ -470,10 +475,12 @@ pub fn spawn_greybox(
         commands.entity(rudder).insert(ChildOf(sub_root));
 
         // Forward floodlight as a child (spotlight)
-        let light_pos = Vec3::new(0.01, 0.3, 0.0);
+        let light_pos = Vec3::new(0.04, 0.5, 0.0);
         let light_transform =
-            Transform::from_translation(light_pos).looking_at(light_pos + Vec3::X, Vec3::Y);
-        commands
+            Transform::from_translation(light_pos);
+
+        let floodlight_name = Name::new("Sub Floodlight");
+        let floodlight_entity = commands
             .spawn((
                 SpotLight {
                     color: Color::srgb(1.0, 1.0, 1.0),
@@ -484,10 +491,11 @@ pub fn spawn_greybox(
                     shadows_enabled: true,
                     ..Default::default()
                 },
+                floodlight_name.clone(),
                 light_transform,
-                Name::new("Sub Floodlight"),
             ))
-            .insert(ChildOf(sub_root));
+            .insert(ChildOf(sub_root)).id();
+        make_swivel_clip(&mut commands, floodlight_entity, &floodlight_name, clips, graphs);
 
         let tail_point_light_pos = Vec3::new(-1.1, 0.27, 0.0);
         let tail_root = commands
