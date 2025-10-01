@@ -11,14 +11,14 @@ pub(super) fn toggle_volumetric_mode(
 ) {
     if keys.just_pressed(KeyCode::KeyV) {
         state.mode = match state.mode {
-            VolumetricLightingMode::LegacyCones => VolumetricLightingMode::RaymarchCones,
-            VolumetricLightingMode::RaymarchCones => VolumetricLightingMode::LegacyCones,
+            VolumetricLightingMode::RaymarchCones => VolumetricLightingMode::Disabled,
+            VolumetricLightingMode::Disabled => VolumetricLightingMode::RaymarchCones,
         };
         println!(
             "Volumetric mode: {}",
             match state.mode {
-                VolumetricLightingMode::LegacyCones => "Legacy",
                 VolumetricLightingMode::RaymarchCones => "Raymarch",
+                VolumetricLightingMode::Disabled => "Disabled",
             }
         );
     }
@@ -51,8 +51,8 @@ pub(super) fn update_mode_label(
         return;
     }
     let text = match state.mode {
-        VolumetricLightingMode::LegacyCones => "Volumetrics: legacy [V]",
         VolumetricLightingMode::RaymarchCones => "Volumetrics: raymarch [V]",
+        VolumetricLightingMode::Disabled => "Volumetrics: off [V]",
     };
     for mut t in &mut q {
         *t = Text::new(text);

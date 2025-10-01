@@ -1,7 +1,11 @@
 use bevy::asset::AssetServer;
-use bevy::pbr::{DistanceFog, FogFalloff, FogMeta, GpuFog, ViewFogUniformOffset};
+use bevy::pbr::{
+    DirectionalLightShadowMap, DistanceFog, FogFalloff, FogMeta, GpuFog, LightMeta,
+    ViewFogUniformOffset,
+};
 use bevy::prelude::*;
 use bevy::render::render_resource::{BindGroupLayoutDescriptor, ShaderType};
+use bevy::render::texture::TextureCache;
 use bevy::render::{
     mesh::{Mesh, MeshVertexBufferLayoutRef, RenderMesh},
     render_asset::RenderAssets,
@@ -324,6 +328,7 @@ pub(super) fn prepare_view_cone_lights(
     mut pipelines: ResMut<SpecializedRenderPipelines<ConeVolumePipeline>>,
     mut pipeline: ResMut<ConeVolumePipeline>,
     render_device: Res<RenderDevice>,
+    texture_cache: Res<TextureCache>,
     mesh_assets: Res<RenderAssets<RenderMesh>>,
 ) {
     let raymarch = matches!(mode.0, VolumetricLightingMode::RaymarchCones);
@@ -414,7 +419,6 @@ pub(super) fn prepare_view_cone_lights(
             contents: bytemuck::bytes_of(&view_uniform),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
-
         let shadow_view = resources
             .fallback_shadow_texture
             .create_view(&TextureViewDescriptor {

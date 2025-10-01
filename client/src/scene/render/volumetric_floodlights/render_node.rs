@@ -1,5 +1,5 @@
 use bevy::ecs::query::QueryItem;
-use bevy::pbr::{FogMeta, ViewFogUniformOffset};
+use bevy::pbr::{FogMeta, ViewClusterBindings, ViewFogUniformOffset, ViewShadowBindings};
 use bevy::prelude::*;
 use bevy::render::{
     camera::ExtractedCamera,
@@ -29,13 +29,16 @@ impl ViewNode for FloodlightViewNode {
         Option<&'static ViewDepthTexture>,
         Option<&'static ViewConeRenderData>,
         Option<&'static ViewFogUniformOffset>,
+        &'static ViewShadowBindings,
     );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, target, depth_texture, render_data, fog_offset): QueryItem<Self::ViewQuery>,
+        (camera, target, depth_texture, render_data, fog_offset, view_shadow_bindings): QueryItem<
+            Self::ViewQuery,
+        >,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let mode = world.resource::<RenderVolumetricLightingMode>();
@@ -86,10 +89,10 @@ impl ViewNode for FloodlightViewNode {
         }
 
         render_pass.set_render_pipeline(pipeline);
-        render_pass.set_bind_group(0, &render_data.global, &[]);    //Global shadow atlas
-        render_pass.set_bind_group(1, &render_data.view, &[]);      //depth-stencil texture
+        render_pass.set_bind_group(0, &render_data.global, &[]); //Global shadow atlas
+        render_pass.set_bind_group(1, &render_data.view, &[]); //depth-stencil texture
         if let (Some(fog_bg), Some(fog_offset)) = (&render_data.fog, fog_offset) {
-            render_pass.set_bind_group(3, fog_bg, &[fog_offset.offset]);   // DistanceFog GPU uniform
+            render_pass.set_bind_group(3, fog_bg, &[fog_offset.offset]); // DistanceFog GPU uniform
         }
         for draw in &render_data.draws {
             let Some(render_mesh) = mesh_assets.get(&draw.mesh) else {

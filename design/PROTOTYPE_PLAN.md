@@ -27,10 +27,10 @@ Core loop: fly skiff → fight current → mine node → haul back → dock → 
 - [x] Docking pad volume.
 
 ### Milestone 2 — Skiff and HUD
-- [ ] Skiff entity: thrust, ballast, drag; server authoritative.
-- [ ] Client inputs with prediction + reconciliation.
-- [ ] HUD: speed, hull, cargo, pressure, current arrow.
-- [ ] ΔP adds to physics tick.
+- [x] Skiff entity: thrust, ballast, drag; server authoritative.
+- [x] Client inputs with prediction + reconciliation.
+- [x] HUD: speed, hull, cargo, pressure, current arrow.
+- [x] ΔP adds to physics tick.
 
 ### Milestone 3 — Mining and Cargo
 - [ ] Resource nodes with remaining mass.
@@ -59,7 +59,7 @@ Core loop: fly skiff → fight current → mine node → haul back → dock → 
 ## To-Do List by Subsystem
 
 ### Networking / Protocol
-- [ ] Implement messages: Hello, JoinAck, InputTick, StateDelta, MineRequest/Ack, DockRequest/Ack.
+- [x] Implement messages: Hello, JoinAck, InputTick, StateDelta, MineRequest/Ack, DockRequest/Ack.
 - [ ] Client prediction with rollback.
 - [ ] Snapshot deltas and AOI culling.
 

@@ -62,26 +62,24 @@ fn main() -> Result<()> {
     if args.headless {
         app.add_plugins(MinimalPlugins);
     } else {
-        app.add_plugins((
-            DefaultPlugins
-                .set(AssetPlugin {
-                    file_path: "assets".into(), // path is relative to the client-crate
-                    ..Default::default()
-                })
-                .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
-                        device_label: Some("thalassocracy-client".into()),
-                        // Let wgpu pick the best backend; override with env if needed
-                        backends: Some(Backends::from_env().unwrap_or(Backends::all())),
-                        power_preference: PowerPreference::HighPerformance,
-                        instance_flags: InstanceFlags::VALIDATION | InstanceFlags::DEBUG,
-                        // Write a GPU command trace you can replay with `wgpu-tools` (optional)
-                        trace_path: Some(std::path::PathBuf::from("wgpu-trace")),
-                        ..Default::default()
-                    }),
+        app.add_plugins((DefaultPlugins
+            .set(AssetPlugin {
+                file_path: "assets".into(), // path is relative to the client-crate
+                ..Default::default()
+            })
+            .set(RenderPlugin {
+                render_creation: RenderCreation::Automatic(WgpuSettings {
+                    device_label: Some("thalassocracy-client".into()),
+                    // Let wgpu pick the best backend; override with env if needed
+                    backends: Some(Backends::from_env().unwrap_or(Backends::all())),
+                    power_preference: PowerPreference::HighPerformance,
+                    instance_flags: InstanceFlags::VALIDATION | InstanceFlags::DEBUG,
+                    // Write a GPU command trace you can replay with `wgpu-tools` (optional)
+                    trace_path: Some(std::path::PathBuf::from("wgpu-trace")),
                     ..Default::default()
                 }),
-        ));
+                ..Default::default()
+            }),));
         #[cfg(feature = "windowing")]
         {
             use bevy_inspector_egui::bevy_egui::EguiPlugin;

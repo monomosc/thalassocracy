@@ -9,19 +9,19 @@ use bevy::render::{
 pub mod debug_material;
 pub use debug_material::VolumetricConeDebugMaterial;
 
-pub mod volumetric_cone_material;
-
+mod cones;
 mod extract;
-mod legacy;
 mod pipeline;
 mod render_node;
 mod ui;
+
+pub use cones::VolumetricCone;
 
 pub const CONE_VOLUME_SHADER_PATH: &str = "shaders/volumetric_floodlights/volumetric_cones.wgsl";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VolumetricLightingMode {
-    LegacyCones,
+    Disabled,
     RaymarchCones,
 }
 
@@ -75,7 +75,7 @@ pub struct VolumetricFloodlightsPlugin;
 
 impl Plugin for VolumetricFloodlightsPlugin {
     fn build(&self, app: &mut App) {
-        legacy::register(app);
+        cones::register(app);
 
         app.init_resource::<VolumetricLightingState>()
             .add_systems(Update, ui::toggle_volumetric_mode)

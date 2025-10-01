@@ -2,7 +2,7 @@ use bevy::animation::{AnimationTarget, AnimationTargetId};
 use bevy::asset::ron::de;
 use bevy::color::{LinearRgba, Srgba};
 use bevy::core_pipeline::bloom::BloomPrefilter;
-use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSamplerDescriptor};
+use bevy::image::{ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSamplerDescriptor};
 use bevy::math::primitives::{Cuboid, Plane3d, Sphere};
 use bevy::math::{Affine2, Vec2};
 use bevy::pbr::{MeshMaterial3d, StandardMaterial};
@@ -21,7 +21,7 @@ use super::setup::spawn_box;
 use super::submarine::{
     make_rudder_prism_mesh, AngularVelocity, Rudder, SubPhysics, Submarine, Velocity,
 };
-use bevy::render::render_resource::{Face, TextureUsages};
+use bevy::render::render_resource::{Face, FilterMode, TextureUsages};
 
 #[derive(Component)]
 pub struct StationRoom;
@@ -177,17 +177,21 @@ pub fn spawn_greybox(
                 });
             },
         );
-        /*
-        let tex_roughness: Handle<Image> = asset_server.load_with_settings(
-            "textures/rock_face_03_nor_gl_4k.exr", |settings: &mut ImageLoaderSettings| {
-                settings.sampler = bevy::image::ImageSampler::Descriptor(ImageSamplerDescriptor { 
+
+        let tex_normal: Handle<Image> = asset_server.load_with_settings(
+            "textures/rock_face_03_nor_gl_4k_zip.exr",
+            |settings: &mut ImageLoaderSettings| {
+                settings.sampler = bevy::image::ImageSampler::Descriptor(ImageSamplerDescriptor {
                     address_mode_u: ImageAddressMode::Repeat,
                     address_mode_v: ImageAddressMode::Repeat,
                     address_mode_w: ImageAddressMode::Repeat,
+                    mag_filter: ImageFilterMode::Linear,
+                    min_filter: ImageFilterMode::Linear,
+                    mipmap_filter: ImageFilterMode::Linear,
                     ..default()
                 });
             },
-        );*/
+        );
 
         // Helper to build a material with custom UV tiling and optional flips
         let mut make_mat = |repeats: Vec2, flip_x: bool, flip_y: bool| {
@@ -201,12 +205,12 @@ pub fn spawn_greybox(
             materials.add(StandardMaterial {
                 base_color: Color::WHITE,
                 base_color_texture: Some(tex_albedo.clone()),
-                //normal_map_texture: Some(tex_roughness.clone()),
+                normal_map_texture: Some(tex_normal.clone()),
                 metallic: 0.1,
                 perceptual_roughness: 0.95,
                 // Ensure interior faces render correctly when viewed from inside the tunnel
-                cull_mode: None,
-                double_sided: true,
+                cull_mode: Some(Face::Back),
+                double_sided: false,
                 uv_transform: uv,
                 ..Default::default()
             })
@@ -278,6 +282,9 @@ pub fn spawn_greybox(
             // Denser spacing: 7 bulbs evenly along the tunnel length
             let count = 7;
             for i in 0..count {
+                if i == 5 {
+                    continue;
+                }
                 let t = i as f32 / (count - 1) as f32; // 0..1
                 let x = -half.x * 0.6 + (half.x * 1.2) * t; // span a bit inside both ends
                 let pos = Vec3::new(x, y, 0.0);
@@ -300,8 +307,26 @@ pub fn spawn_greybox(
                     ))
                     .insert(ChildOf(parent));
             }
+            //one cone light
+            commands
+                .spawn((
+                    Transform::from_translation(Vec3::new(
+                        -half.x * 0.6 + (half.x * 1.2) * (5.0 / (count - 1) as f32),
+                        y,
+                        0.0,
+                    ))
+                    .looking_to(-Vec3::Y, Vec3::Y),
+                    SpotLight {
+                        color: Color::WHITE,
+                        intensity: 1_000_000f32,
+                        shadows_enabled: true,
+                        affects_lightmapped_mesh_diffuse: true,
+                        ..Default::default()
+                    },
+                    Name::new("Ceiling directional light"),
+                ))
+                .insert(ChildOf(parent));
         }
-
         parent
     };
 
@@ -476,8 +501,7 @@ pub fn spawn_greybox(
 
         // Forward floodlight as a child (spotlight)
         let light_pos = Vec3::new(0.04, 0.5, 0.0);
-        let light_transform =
-            Transform::from_translation(light_pos);
+        let light_transform = Transform::from_translation(light_pos);
 
         let floodlight_name = Name::new("Sub Floodlight");
         let floodlight_entity = commands
@@ -494,8 +518,15 @@ pub fn spawn_greybox(
                 floodlight_name.clone(),
                 light_transform,
             ))
-            .insert(ChildOf(sub_root)).id();
-        make_swivel_clip(&mut commands, floodlight_entity, &floodlight_name, clips, graphs);
+            .insert(ChildOf(sub_root))
+            .id();
+        make_swivel_clip(
+            &mut commands,
+            floodlight_entity,
+            &floodlight_name,
+            clips,
+            graphs,
+        );
 
         let tail_point_light_pos = Vec3::new(-1.1, 0.27, 0.0);
         let tail_root = commands

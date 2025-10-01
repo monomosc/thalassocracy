@@ -363,7 +363,7 @@ fn march_cone(
         let V = normalize(camera_pos - sample_pos);
         let cos_theta = dot(L, V);
         let phase = artistic_phase(cos_theta, 2.0); //High g for seawater
-
+        let hgphase = hg_phase(cos_theta, 0.3);
 
         let distance_falloff = 1.0 / (1.0 + axial * axial * 0.12);
         let weight = angular_weight * radial_weight;

@@ -321,13 +321,17 @@ pub fn make_rudder_prism_mesh(length: f32, height: f32, thickness: f32) -> Mesh 
     mesh
 }
 
-
 const SWIVEL_PERIOD: f32 = 4.0f32;
 const SWIVEL_DEG: f32 = 15.0f32;
 const SAMPLES: u32 = 40;
 
-pub fn make_swivel_clip(commands: &mut Commands, light_entity: Entity, name: &Name, mut clips: ResMut<Assets<AnimationClip>>, mut graphs: ResMut<Assets<AnimationGraph>>) {
-    
+pub fn make_swivel_clip(
+    commands: &mut Commands,
+    light_entity: Entity,
+    name: &Name,
+    mut clips: ResMut<Assets<AnimationClip>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+) {
     let mut clip = AnimationClip::default();
 
     let correction = Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2);
@@ -350,17 +354,19 @@ pub fn make_swivel_clip(commands: &mut Commands, light_entity: Entity, name: &Na
         ),
     );
 
-
-        // Turn the clip into a graph and set it to repeat when played
+    // Turn the clip into a graph and set it to repeat when played
     let (graph, node_index) = AnimationGraph::from_clip(clips.add(clip));
     let graph_handle = graphs.add(graph);
 
     let mut player = AnimationPlayer::default();
     player.play(node_index).repeat();
 
-    commands.entity(light_entity)
-    .insert(AnimationGraphHandle(graph_handle))
-    .insert(player)
-    .insert(AnimationTarget { id: target_id, player: light_entity });
-
+    commands
+        .entity(light_entity)
+        .insert(AnimationGraphHandle(graph_handle))
+        .insert(player)
+        .insert(AnimationTarget {
+            id: target_id,
+            player: light_entity,
+        });
 }
