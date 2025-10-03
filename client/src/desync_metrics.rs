@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use std::time::Instant;
 
-use crate::hud_controls::ThrustInput;
+use crate::ThrustInput;
 
 /// Rolling network client stats updated by net.rs systems.
 #[derive(Resource, Debug)]

@@ -2,11 +2,14 @@ use crate::scene::submarine::{SubTelemetry, Submarine, Velocity};
 use crate::scene::SimSet;
 use bevy::pbr::wireframe::WireframeConfig;
 use bevy::prelude::*;
+#[cfg(feature = "windowing")]
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+#[cfg(feature = "windowing")]
 use bevy_inspector_egui::InspectorOptions;
 use levels::{builtins::greybox_level, sample_flow_at, Vec3f};
 
-#[derive(Resource, Debug, Clone, Reflect, InspectorOptions)]
+#[cfg_attr(feature = "windowing", derive(InspectorOptions))]
+#[derive(Resource, Debug, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct DebugVis {
     pub labels: bool,
@@ -39,10 +42,12 @@ pub struct DebugVisPlugin;
 
 impl Plugin for DebugVisPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<DebugVis>()
-            .register_type::<DebugVis>()
-            .add_plugins(ResourceInspectorPlugin::<DebugVis>::default())
-            .add_systems(Startup, spawn_debug_overlay)
+        app.init_resource::<DebugVis>().register_type::<DebugVis>();
+
+        #[cfg(feature = "windowing")]
+        app.add_plugins(ResourceInspectorPlugin::<DebugVis>::default());
+
+        app.add_systems(Startup, spawn_debug_overlay)
             .add_systems(
                 Update,
                 (
@@ -131,7 +136,7 @@ fn update_debug_overlay(
     mut last: Local<OverlayLastYaw>,
     mut q_text: Query<&mut Text, With<DebugOverlayNode>>,
     q_sub: Query<(&Transform, &Velocity), With<Submarine>>,
-    controls: Option<Res<crate::hud_controls::ThrustInput>>,
+    controls: Option<Res<crate::ThrustInput>>,
     vis: Res<DebugVis>,
     telemetry: Option<Res<SubTelemetry>>,
     pause: Option<Res<crate::sim_pause::SimPause>>,

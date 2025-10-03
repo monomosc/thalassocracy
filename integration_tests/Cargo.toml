@@ -1,0 +1,21 @@
+[package]
+name = "integration_tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+bevy_app = "0.16"
+bevy_ecs = "0.16"
+bevy_time = "0.16"
+bevy_utils = "0.16"
+bevy_renet = "2.0.0"
+bevy_transform = "0.16"
+client = { path = "../client", default-features = false }
+server = { path = "../server" }
+levels = { path = "../levels" }
+protocol = { path = "../protocol" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+

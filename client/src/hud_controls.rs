@@ -1,45 +1,29 @@
+use crate::input::ThrustInput;
 use crate::net::{ConnectStart, TimeSync};
 use crate::sim_pause::SimPause;
 use bevy::prelude::*;
-use bevy_egui::EguiPrimaryContextPass;
-use bevy_inspector_egui::bevy_egui::EguiContexts;
 use bevy_renet::renet::{DefaultChannel, RenetClient};
 
-#[derive(Resource, Debug)]
-pub struct ThrustInput {
-    pub value: f32, // -1.0 .. 1.0 (forward/back)
-    /// Rudder in [-1,1]. Convention: +1 = right rudder (nose right under forward motion).
-    pub yaw: f32, // -1.0 .. 1.0 (right rudder positive)
-    /// Forward ballast pump speed in [-1,1]. +1 pumps water in, -1 pumps out.
-    pub pump_fwd: f32,
-    /// Aft ballast pump speed in [-1,1]. +1 pumps water in, -1 pumps out.
-    pub pump_aft: f32,
-    pub tick: u64,
-}
-
-impl Default for ThrustInput {
-    fn default() -> Self {
-        Self {
-            value: 0.0,
-            yaw: 0.0,
-            pump_fwd: 0.0,
-            pump_aft: 0.0,
-            tick: 0,
-        }
-    }
-}
+#[cfg(feature = "windowing")]
+use bevy_egui::EguiPrimaryContextPass;
+#[cfg(feature = "windowing")]
+use bevy_inspector_egui::bevy_egui::EguiContexts;
 
 pub struct HudControlsPlugin;
 
 impl Plugin for HudControlsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ThrustInput>()
-            // Ensure the egui UI runs between BeginPass (PreUpdate) and EndPass (PostUpdate)
-            .add_systems(EguiPrimaryContextPass, ui_thrust_slider)
             .add_systems(Update, (send_thrust_input, send_pause_request));
+
+        #[cfg(feature = "windowing")]
+        {
+            app.add_systems(EguiPrimaryContextPass, ui_thrust_slider);
+        }
     }
 }
 
+#[cfg(feature = "windowing")]
 fn ui_thrust_slider(
     mut egui_ctx: EguiContexts,
     mut thrust: ResMut<ThrustInput>,

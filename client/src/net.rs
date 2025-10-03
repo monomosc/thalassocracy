@@ -221,7 +221,7 @@ pub fn apply_state_to_sub(
         With<Submarine>,
     >,
     mut net_stats: ResMut<NetClientStats>,
-    controls: Option<Res<crate::hud_controls::ThrustInput>>,
+    controls: Option<Res<crate::ThrustInput>>,
     time: Res<Time>,
     mut filtered: ResMut<FilteredServerState>,
     connect: Option<Res<ConnectStart>>,

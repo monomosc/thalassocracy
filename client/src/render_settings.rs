@@ -1,21 +1,24 @@
 use bevy::prelude::*;
+#[cfg(feature = "windowing")]
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+#[cfg(feature = "windowing")]
 use bevy_inspector_egui::InspectorOptions;
 
-#[derive(Resource, Debug, Clone, Reflect, InspectorOptions)]
+#[cfg_attr(feature = "windowing", derive(InspectorOptions))]
+#[derive(Resource, Debug, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct RenderSettings {
     pub volumetric_cones: bool,
-    #[inspector(min = 0.0, max = 5.0)]
+    #[cfg_attr(feature = "windowing", inspector(min = 0.0, max = 5.0))]
     pub volumetric_cone_intensity: f32,
-    #[inspector(min = 0.0, max = 2.0)]
+    #[cfg_attr(feature = "windowing", inspector(min = 0.0, max = 2.0))]
     pub volumetric_cone_distance_falloff: f32,
-    #[inspector(min = 0.0, max = 0.5)]
+    #[cfg_attr(feature = "windowing", inspector(min = 0.0, max = 0.5))]
     pub volumetric_cone_angular_softness: f32,
-    #[inspector(min = 0.0, max = 3.0)]
+    #[cfg_attr(feature = "windowing", inspector(min = 0.0, max = 3.0))]
     pub volumetric_cone_extinction: f32,
     pub water_post: bool,
-    #[inspector(min = 0.0, max = 5.0)]
+    #[cfg_attr(feature = "windowing", inspector(min = 0.0, max = 5.0))]
     pub water_post_strength: f32,
     pub water_post_debug: bool,
 }
@@ -40,17 +43,22 @@ pub struct RenderSettingsPlugin;
 impl Plugin for RenderSettingsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderSettings>()
-            .register_type::<RenderSettings>()
-            .add_plugins(ResourceInspectorPlugin::<RenderSettings>::default())
-            .init_resource::<VolumetricConeShaderDebugSettings>()
-            .register_type::<VolumetricConeShaderDebugSettings>()
-            .add_plugins(ResourceInspectorPlugin::<VolumetricConeShaderDebugSettings>::default());
+            .register_type::<RenderSettings>();
+
+        #[cfg(feature = "windowing")]
+        app.add_plugins(ResourceInspectorPlugin::<RenderSettings>::default());
+
+        app.init_resource::<VolumetricConeShaderDebugSettings>()
+            .register_type::<VolumetricConeShaderDebugSettings>();
+
+        #[cfg(feature = "windowing")]
+        app.add_plugins(ResourceInspectorPlugin::<VolumetricConeShaderDebugSettings>::default());
     }
 }
-
-#[derive(Resource, Debug, Clone, Reflect, InspectorOptions, Default)]
+#[cfg_attr(feature = "windowing", derive(InspectorOptions))]
+#[derive(Resource, Debug, Clone, Reflect, Default)]
 #[reflect(Resource)]
 pub struct VolumetricConeShaderDebugSettings {
-    #[inspector(min = 0, max = 5)]
+    #[cfg_attr(feature = "windowing", inspector(min = 0, max = 5))]
     pub debug_mode: u32,
 }

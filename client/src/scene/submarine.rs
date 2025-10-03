@@ -77,7 +77,7 @@ pub fn simulate_submarine(
         ),
         With<Submarine>,
     >,
-    controls: Option<Res<crate::hud_controls::ThrustInput>>,
+    controls: Option<Res<crate::ThrustInput>>,
     mut telemetry: ResMut<SubTelemetry>,
     paused: Res<SimPause>,
     mut timing: ResMut<ClientPhysicsTiming>,
@@ -192,7 +192,7 @@ pub fn apply_server_corrections(
     time: Res<Time>,
     mut commands: Commands,
     mut q: Query<(Entity, &mut Transform, &mut Velocity, &mut ServerCorrection), With<Submarine>>,
-    controls: Option<Res<crate::hud_controls::ThrustInput>>,
+    controls: Option<Res<crate::ThrustInput>>,
 ) {
     let dt = time.delta_secs();
     if dt <= 0.0 {
@@ -234,7 +234,7 @@ pub fn animate_rudder(
     _time: Res<Time>,
     q_sub: Query<(&Transform, &Velocity), With<Submarine>>,
     mut q_rudder: Query<&mut Transform, (With<Rudder>, Without<Submarine>)>,
-    controls: Option<Res<crate::hud_controls::ThrustInput>>,
+    controls: Option<Res<crate::ThrustInput>>,
 ) {
     let Ok((_sub_t, _sub_v)) = q_sub.single() else {
         return;
