@@ -1,6 +1,6 @@
 use super::flow::sample_flow_at;
 use super::terms::*;
-use super::types::{SubInputs, SubState, SubStepDebug};
+use super::types::{SubInputState, SubState, SubStepDebug};
 use super::util::{
     quat_rotate_vec3, quat_to_yaw, vadd, vscale, vsub, BODY_FWD, BODY_RIGHT, BODY_UP,
 };
@@ -11,7 +11,7 @@ use crate::{LevelSpec, Quatf, SubPhysicsSpec, Vec3f};
 pub fn step_submarine(
     level: &LevelSpec,
     spec: &SubPhysicsSpec,
-    inputs: SubInputs,
+    inputs: SubInputState,
     state: &mut SubState,
     dt: f32,
     time: f32,
@@ -23,7 +23,7 @@ pub fn step_submarine(
 pub fn step_submarine_dbg(
     level: &LevelSpec,
     spec: &SubPhysicsSpec,
-    inputs: SubInputs,
+    inputs: SubInputState,
     state: &mut SubState,
     dt: f32,
     time: f32,
@@ -252,6 +252,7 @@ pub fn step_submarine_dbg(
         d.dt = dt;
         d.time = time;
         d.inputs = inputs;
+        d.raw_inputs = None;
         d.forward = forward;
         d.right = right;
         d.flow = flow;

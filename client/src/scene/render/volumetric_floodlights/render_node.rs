@@ -36,7 +36,7 @@ impl ViewNode for FloodlightViewNode {
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, target, depth_texture, render_data, fog_offset, view_shadow_bindings): QueryItem<
+        (camera, target, depth_texture, render_data, fog_offset, _view_shadow_bindings): QueryItem<
             Self::ViewQuery,
         >,
         world: &World,

@@ -11,20 +11,20 @@ pub struct WaterFxPlugin;
 
 impl Plugin for WaterFxPlugin {
     fn build(&self, app: &mut App) {
-        /* app.init_resource::<UnderwaterAssets>()
+        app.init_resource::<UnderwaterAssets>()
         .init_resource::<UnderwaterSettings>()
         .add_systems(Startup, setup_underwater_assets)
         .add_systems(
             Update,
             (
                 tune_camera_underwater,
-                //ensure_mote_field,
-                //tick_motes,
+                ensure_mote_field,
+                tick_motes,
                 ensure_bubble_emitter,
                 spawn_bubbles,
                 tick_bubbles,
             ),
-        );*/
+        );
     }
 }
 

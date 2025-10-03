@@ -11,10 +11,10 @@ mod integration {
     use bevy_transform::components::{GlobalTransform, Transform};
     use client::net::FilteredServerState;
     use client::scene::submarine::{
-        AngularVelocity, SubPhysics, SubStateComp, Submarine, Velocity,
+        AngularVelocity, SubInputStateComp, SubPhysics, SubStateComp, Submarine, Velocity,
     };
     use client::{build_minimal_client_app, Args as ClientArgs};
-    use levels::{subspecs::small_skiff_spec, Quatf, SubState, Vec3f};
+    use levels::{subspecs::small_skiff_spec, Quatf, SubInputState, SubState, Vec3f};
     use protocol::ClientToServer;
     use server::{build_server_app, Config, ServerAddresses, SubStateComp as ServerSubStateComp};
 

@@ -15,7 +15,8 @@ pub mod builtins;
 
 pub mod submarine_physics;
 pub use submarine_physics::{
-    sample_flow_at, step_submarine, step_submarine_dbg, SubInputs, SubState, SubStepDebug,
+    sample_flow_at, step_submarine, step_submarine_dbg, SubInputState, SubInputs, SubState,
+    SubStepDebug,
 };
 
 mod sub_specs;

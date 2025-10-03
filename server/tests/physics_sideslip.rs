@@ -1,6 +1,6 @@
 use levels::{
-    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
-    Vec3f,
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputState,
+    SubState, Vec3f,
 };
 
 #[inline]
@@ -34,7 +34,7 @@ fn run_sideslip_scenario(flow: Vec3f, ticks: usize, thrust: f32) {
     // Simulate
     let dt = 1.0 / 30.0; // 30 Hz
     let mut t = 0.0f32;
-    let inputs = SubInputs {
+    let inputs = SubInputState {
         thrust,
         yaw: 0.0,
         pump_fwd: 0.0,
@@ -98,7 +98,7 @@ fn run_rudder_sign_scenario(thrust: f32, _rudder: f32, warm_ticks: usize, steer_
     };
     let dt = 1.0 / 30.0;
     let mut t = 0.0f32;
-    let warm_inputs = SubInputs {
+    let warm_inputs = SubInputState {
         thrust,
         yaw: 0.0,
         pump_fwd: 0.0,
@@ -110,7 +110,7 @@ fn run_rudder_sign_scenario(thrust: f32, _rudder: f32, warm_ticks: usize, steer_
     }
     let yaw0 = yaw_of(state.orientation);
     // Steer to the right with positive slider
-    let steer_inputs = SubInputs {
+    let steer_inputs = SubInputState {
         thrust,
         yaw: 0.2,
         pump_fwd: 0.0,

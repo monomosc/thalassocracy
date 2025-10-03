@@ -150,6 +150,6 @@ pub(super) fn update_ballast_hud(
         } else {
             0.0
         };
-        txt.0 = format!("Buoyancy: net {:>7.1} N", b);
+        txt.0 = format!("Buoyancy: net {b:>7.1} N");
     }
 }

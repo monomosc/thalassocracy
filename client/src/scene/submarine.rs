@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
 
-use levels::{builtins::greybox_level, SubInputs, SubState, SubStepDebug};
+use levels::{builtins::greybox_level, SubInputState, SubInputs, SubState, SubStepDebug};
 use levels::{step_submarine_dbg, SubPhysicsSpec};
 
 use crate::sim_pause::SimPause;
@@ -26,6 +26,9 @@ pub struct SubPhysics(pub SubPhysicsSpec);
 
 #[derive(Component, Debug, Clone)]
 pub struct SubStateComp(pub SubState);
+
+#[derive(Component, Debug, Clone, Default)]
+pub struct SubInputStateComp(pub SubInputState);
 
 #[derive(Component, Debug, Clone)]
 #[allow(dead_code)]
@@ -60,6 +63,24 @@ impl Default for ClientPhysicsTiming {
     }
 }
 
+pub fn update_sub_input_state(
+    controls: Option<Res<crate::ThrustInput>>,
+    mut q: Query<&mut SubInputStateComp, With<Submarine>>,
+) {
+    let inputs = controls
+        .as_ref()
+        .map(|c| SubInputs {
+            thrust: c.value,
+            yaw: c.yaw,
+            pump_fwd: c.pump_fwd,
+            pump_aft: c.pump_aft,
+        })
+        .unwrap_or_default();
+    for mut state in &mut q {
+        state.0.apply_inputs(inputs);
+    }
+}
+
 // Quatf is the same type as Bevy's Quat (re-exported from bevy_math).
 
 #[allow(clippy::type_complexity)]
@@ -74,6 +95,7 @@ pub fn simulate_submarine(
             Option<&ServerCorrection>,
             &mut AngularVelocity,
             Option<&NetControlled>,
+            &SubInputStateComp,
         ),
         With<Submarine>,
     >,
@@ -104,7 +126,7 @@ pub fn simulate_submarine(
     // Build a transient LevelSpec identical to what's spawned (use the builtin for now)
     let level = greybox_level();
 
-    let inputs = if let Some(c) = controls {
+    let raw_inputs = if let Some(c) = controls {
         SubInputs {
             thrust: c.value,
             yaw: c.yaw,
@@ -115,8 +137,16 @@ pub fn simulate_submarine(
         SubInputs::default()
     };
 
-    for (mut transform, mut vel, mut state_comp, spec, _correction, mut ang_vel_comp, _net) in
-        &mut q_sub
+    for (
+        mut transform,
+        mut vel,
+        mut state_comp,
+        spec,
+        _correction,
+        mut ang_vel_comp,
+        _net,
+        input_state,
+    ) in &mut q_sub
     {
         // Map visual mesh (+X forward) to physics body (+Z forward): yaw +90°
         let body_from_mesh = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
@@ -153,12 +183,13 @@ pub fn simulate_submarine(
             step_submarine_dbg(
                 &level,
                 &spec.0,
-                inputs,
+                input_state.0,
                 &mut state,
                 step_dt,
                 t_sub,
                 Some(&mut dbg),
             );
+            dbg.raw_inputs = Some(raw_inputs);
             telemetry.0 = dbg; // store last step's diagnostics
         }
         // Persist state back to component

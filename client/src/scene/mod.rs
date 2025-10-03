@@ -33,6 +33,7 @@ impl Plugin for ScenePlugin {
                     camera::switch_cameras_keys,
                     camera::free_fly_camera,
                     flow_field::draw_flow_gizmos,
+                    submarine::update_sub_input_state,
                     submarine::simulate_submarine.in_set(SimSet),
                     submarine::apply_server_corrections,
                     camera::update_game_camera.after(SimSet),
@@ -42,7 +43,7 @@ impl Plugin for ScenePlugin {
 
         // Lightweight underwater look and feel
         app.add_plugins(render::volumetric_floodlights::VolumetricFloodlightsPlugin);
-        app.add_plugins(water::WaterFxPlugin);
+        //app.add_plugins(water::WaterFxPlugin);
         app.add_plugins(postprocess::WaterPostProcessPlugin);
         app.add_plugins(ore::OrePlugin);
     }

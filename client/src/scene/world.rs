@@ -420,6 +420,7 @@ pub fn spawn_greybox(
                 crate::hud_instruments::HudInstrumentState::default(),
                 // Initialize persistent physics state; fill is set in simulate on first tick
                 super::submarine::SubStateComp(levels::SubState { position: levels::Vec3f::new(start.x, start.y, start.z), velocity: levels::Vec3f::ZERO, orientation: Quat::IDENTITY, ang_mom: levels::Vec3f::ZERO, ballast_fill: Vec::new() }),
+                super::submarine::SubInputStateComp(levels::SubInputState::default()),
                 Name::new("SubmarineRoot"),
             ))
             .id();
@@ -589,3 +590,4 @@ pub fn draw_flow_gizmos(
         }
     }
 }
+

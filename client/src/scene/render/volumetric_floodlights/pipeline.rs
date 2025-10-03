@@ -308,7 +308,8 @@ struct ConeVolumePerConeUniform {
     angles: Vec4,
 }
 
-#[allow(clippy::too_many_arguments)]
+
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(super) fn prepare_view_cone_lights(
     mut commands: Commands,
     views: Query<(
@@ -317,7 +318,6 @@ pub(super) fn prepare_view_cone_lights(
         Option<&ViewDepthTexture>,
         Option<&ViewFogUniformOffset>,
         Option<&Msaa>,
-        Option<&ViewFogUniformOffset>,
     )>,
     fog_meta: Res<FogMeta>,
     cones: Res<ExtractedConeLights>,
@@ -328,11 +328,10 @@ pub(super) fn prepare_view_cone_lights(
     mut pipelines: ResMut<SpecializedRenderPipelines<ConeVolumePipeline>>,
     mut pipeline: ResMut<ConeVolumePipeline>,
     render_device: Res<RenderDevice>,
-    texture_cache: Res<TextureCache>,
     mesh_assets: Res<RenderAssets<RenderMesh>>,
 ) {
     let raymarch = matches!(mode.0, VolumetricLightingMode::RaymarchCones);
-    for (entity, view, depth_texture, fog_uniform, msaa, fog_offset) in &views {
+    for (entity, view, depth_texture, fog_offset, msaa) in &views {
         let mut entity_commands = commands.entity(entity);
         if !raymarch || cones.cones.is_empty() {
             entity_commands.remove::<ViewConeRenderData>();

@@ -1,6 +1,6 @@
 use levels::{
-    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
-    Vec3f,
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputState,
+    SubState, Vec3f,
 };
 
 fn calm_level(mut base: LevelSpec) -> LevelSpec {
@@ -32,7 +32,7 @@ fn forward_full_aft_empty_pitches_nose_down() {
     }
 
     // No thrust or rudder; no pumps during the test
-    let inputs = SubInputs {
+    let inputs = SubInputState {
         thrust: 0.0,
         yaw: 0.0,
         pump_fwd: 0.0,

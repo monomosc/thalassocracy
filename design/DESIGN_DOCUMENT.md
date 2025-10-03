@@ -100,6 +100,6 @@ Caves are impermanent. Each has a **lifetime of ~1 month**:
   - `let f = orientation * Vec3f::new(0.0, 0.0, 1.0);`
   - `let yaw = (-f.x).atan2(f.z); // +yaw turns nose left`
 - Submarine Physics: split into focused modules under `levels/src/submarine_physics/`.
-  - `types.rs`: public structs (`SubState`, `SubInputs`, `SubStepDebug`).
+  - `types.rs`: public structs (`SubState`, `SubInputs`, `SubInputState`, `SubStepDebug`).
   - `flow.rs`: flow field sampling.
   - `dynamics.rs`: thrust/rudder/buoyancy/drag integration.

@@ -40,8 +40,8 @@ pub fn spawn_greybox(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
     proc_tex: Option<Res<ProcTexAssets>>,
-    mut clips: ResMut<Assets<AnimationClip>>,
-    mut graphs: ResMut<Assets<AnimationGraph>>,
+    clips: ResMut<Assets<AnimationClip>>,
+    graphs: ResMut<Assets<AnimationGraph>>,
 ) {
     // Convert helpers
     fn v(v: Vec3f) -> Vec3 {
@@ -453,6 +453,7 @@ pub fn spawn_greybox(
                     ang_mom: levels::Vec3f::ZERO,
                     ballast_fill: Vec::new(),
                 }),
+                super::submarine::SubInputStateComp(levels::SubInputState::default()),
                 Name::new("SubmarineRoot"),
             ))
             .id();

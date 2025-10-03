@@ -1,6 +1,6 @@
 use levels::{
-    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
-    Vec3f,
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputState,
+    SubState, Vec3f,
 };
 
 #[inline]
@@ -35,7 +35,7 @@ fn yaw_stability_tailflow_dt_1ms() {
     let dt = 0.001; // 1 ms
     let ticks = 1000;
     let mut t = 0.0;
-    let inputs = SubInputs {
+    let inputs = SubInputState {
         thrust: 0.0,
         yaw: 0.0,
         pump_fwd: 0.0,
@@ -71,7 +71,7 @@ fn yaw_stability_tailflow_dt_10ms() {
     let dt = 0.01; // 10 ms
     let ticks = 1000;
     let mut t = 0.0;
-    let inputs = SubInputs {
+    let inputs = SubInputState {
         thrust: 0.0,
         yaw: 0.0,
         pump_fwd: 0.0,

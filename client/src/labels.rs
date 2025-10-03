@@ -56,7 +56,7 @@ fn attach_initial_labels(
             TextColor(color),
             TracksEntity(target),
             LabelNode,
-            Name::new(format!("Label: {}", text)),
+            Name::new(format!("Label: {text}")),
         ));
     };
 

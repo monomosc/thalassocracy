@@ -6,4 +6,4 @@ mod util;
 
 pub use dynamics::{step_submarine, step_submarine_dbg};
 pub use flow::sample_flow_at;
-pub use types::{SubInputs, SubState, SubStepDebug};
+pub use types::{SubInputState, SubInputs, SubState, SubStepDebug};

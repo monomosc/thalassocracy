@@ -1,6 +1,6 @@
 use levels::{
-    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
-    Vec3f,
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputState,
+    SubState, Vec3f,
 };
 
 #[inline]
@@ -35,7 +35,7 @@ fn right_rudder_decreases_yaw_when_moving_forward() {
     let mut t = 0.0f32;
 
     // Warm up to get forward relative flow
-    let warm = SubInputs {
+    let warm = SubInputState {
         thrust: 0.5,
         yaw: 0.0,
         pump_fwd: 0.0,
@@ -48,7 +48,7 @@ fn right_rudder_decreases_yaw_when_moving_forward() {
     let yaw0 = yaw_of(state.orientation);
 
     // Apply right rudder (positive input) while moving forward
-    let steer = SubInputs {
+    let steer = SubInputState {
         thrust: 0.5,
         yaw: 0.3,
         pump_fwd: 0.0,
@@ -86,7 +86,7 @@ fn right_rudder_decreases_yaw_when_moving_backward() {
     let mut t = 0.0f32;
 
     // Warm up backward (negative thrust) to get reversed relative flow
-    let warm = SubInputs {
+    let warm = SubInputState {
         thrust: -0.6,
         yaw: 0.0,
         pump_fwd: 0.0,
@@ -99,7 +99,7 @@ fn right_rudder_decreases_yaw_when_moving_backward() {
     let yaw0 = yaw_of(state.orientation);
 
     // Apply right rudder (positive input) while moving backward
-    let steer = SubInputs {
+    let steer = SubInputState {
         thrust: -0.6,
         yaw: 0.3,
         pump_fwd: 0.0,

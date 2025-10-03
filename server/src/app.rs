@@ -14,7 +14,8 @@ use clap::Parser;
 use levels::subspecs::small_skiff_spec;
 use levels::SubPhysicsSpec;
 use levels::{
-    builtins::greybox_level, step_submarine, LevelSpec, Quatf, SubInputs, SubState, Vec3f,
+    builtins::greybox_level, step_submarine, LevelSpec, Quatf, SubInputState, SubInputs, SubState,
+    Vec3f,
 };
 use protocol::{
     ClientToServer, DisconnectReason, ServerToClient, NETCODE_PROTOCOL_ID, PROTOCOL_VERSION,
@@ -121,6 +122,9 @@ pub struct Submarine;
 
 #[derive(Component)]
 pub struct SubStateComp(pub SubState);
+
+#[derive(Component, Debug, Clone, Default)]
+pub struct SubInputStateComp(pub SubInputState);
 
 #[allow(dead_code)]
 #[derive(Component, Clone)]
@@ -383,6 +387,7 @@ fn server_physics_tick(
         &SubPhysicsComp,
         Option<&ControlInputComp>,
         Option<&mut InputSchedule>,
+        &mut SubInputStateComp,
     )>,
     paused: Res<SimPaused>,
     start: Res<ServerStart>,
@@ -398,7 +403,7 @@ fn server_physics_tick(
         let now_ms = start.0.elapsed().as_millis() as u64;
         if !inbox.0.is_empty() {
             for (entity, evc) in inbox.0.drain(..) {
-                if let Ok((_e, _s, _sp, _ci, Some(mut sched))) = q.get_mut(entity) {
+                if let Ok((_e, _s, _sp, _ci, Some(mut sched), _input_state)) = q.get_mut(entity) {
                     let pos = sched
                         .0
                         .iter()
@@ -412,7 +417,7 @@ fn server_physics_tick(
                 }
             }
         }
-        for (entity, mut s, spec, input, schedule) in &mut q {
+        for (entity, mut s, spec, input, schedule, mut input_state) in &mut q {
             // Apply any scheduled inputs whose time has arrived
             if let Some(mut sched) = schedule {
                 while let Some(front) = sched.0.front() {
@@ -429,7 +434,7 @@ fn server_physics_tick(
                     });
                 }
             }
-            let inp = if let Some(ci) = input {
+            let raw_inputs = if let Some(ci) = input {
                 SubInputs {
                     thrust: ci.thrust,
                     yaw: ci.yaw,
@@ -439,10 +444,12 @@ fn server_physics_tick(
             } else {
                 SubInputs::default()
             };
+            input_state.0.apply_inputs(raw_inputs);
+            let commanded = input_state.0;
             step_submarine(
                 &level.0,
                 &spec.0,
-                inp,
+                commanded,
                 &mut s.0,
                 timing.dt,
                 time.elapsed_secs(),

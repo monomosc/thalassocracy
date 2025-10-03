@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 
 use bevy::pbr::SpotLight;
 use bevy::prelude::*;
@@ -11,12 +11,6 @@ use super::{
     ExtractedVolumetricDebugSettings, ExtractedVolumetricSettings, RenderVolumetricLightingMode,
     VolumetricCone, VolumetricLightingMode, VolumetricLightingState,
 };
-
-pub(super) fn extract_distance_fog(fog: Extract<Query<&DistanceFog, With<Camera3d>>>) {
-    let single_fog = fog
-        .single()
-        .expect("More than one distanceFog Component per World is not supported (yet)");
-}
 
 pub(super) fn extract_volumetric_mode(
     mut commands: Commands,

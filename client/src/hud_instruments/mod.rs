@@ -76,7 +76,7 @@ fn sanitize_ui_nodes(mut q: Query<(Entity, &mut Node, Option<&Name>)>) {
         if !dirty.is_empty() {
             let label = name
                 .map(|n| n.as_str().to_string())
-                .unwrap_or_else(|| format!("Entity#{:?}", e));
+                .unwrap_or_else(|| format!("Entity#{e:?}"));
             tracing::warn!(target: "ui_sanitize", node=%label, fields=?dirty, "Sanitized non-finite UI values");
         }
     }

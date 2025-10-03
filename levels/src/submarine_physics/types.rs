@@ -1,10 +1,48 @@
 use crate::{Quatf, Vec3f};
 
 #[derive(Debug, Clone, Copy, Default)]
+pub struct SubInputs {
+    pub thrust: f32, // -1..1 (forward/back)
+    /// Rudder input in [-1, 1].
+    /// Convention: +1 = right rudder (nose yaws right when moving forward),
+    /// -1 = left rudder. The physics maps this to yaw torque so that forward
+    /// motion with positive input decreases heading_yaw (right turn).
+    pub yaw: f32, // -1..1 (right rudder positive)
+    /// Forward ballast pump speed in [-1,1]. +1 pumps water in (fill), -1 pumps out.
+    pub pump_fwd: f32,
+    /// Aft ballast pump speed in [-1,1]. +1 pumps water in (fill), -1 pumps out.
+    pub pump_aft: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SubInputState {
+    pub thrust: f32,
+    pub yaw: f32,
+    pub pump_fwd: f32,
+    pub pump_aft: f32,
+}
+
+impl SubInputState {
+    pub fn from_inputs(inputs: SubInputs) -> Self {
+        Self {
+            thrust: inputs.thrust,
+            yaw: inputs.yaw,
+            pump_fwd: inputs.pump_fwd,
+            pump_aft: inputs.pump_aft,
+        }
+    }
+
+    pub fn apply_inputs(&mut self, inputs: SubInputs) {
+        *self = Self::from_inputs(inputs);
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SubStepDebug {
     pub dt: f32,
     pub time: f32,
-    pub inputs: SubInputs,
+    pub inputs: SubInputState,
+    pub raw_inputs: Option<SubInputs>,
     // Orientation basis (world XZ plane)
     pub forward: Vec3f,
     pub right: Vec3f,
@@ -52,29 +90,15 @@ pub struct SubStepDebug {
 pub struct SubState {
     pub position: Vec3f,
     pub velocity: Vec3f,
-    /// Orientation as quaternion (body→world).
+    /// Orientation as quaternion (body->world).
     /// Frame conventions (see design/COORDINATES_AND_CONVENTIONS.md):
     /// - Body axes: +Z forward, +Y up, +X right (starboard).
     /// - World axes: +Z forward, +Y up, +X right.
-    /// - Positive yaw rate (ω_y) turns the nose to the left (CCW when looking down +Y).
+    /// - Positive yaw rate (omega_y) turns the nose to the left (CCW when looking down +Y).
     pub orientation: Quatf,
-    /// Angular momentum in body frame (kg·m²·rad/s). Use spec inertia to derive ω.
+    /// Angular momentum in body frame (kg*m^2*rad/s). Use spec inertia to derive omega.
     /// Convention: body axes are +Z forward, +Y up, +X right.
     pub ang_mom: Vec3f,
     /// Ballast tank fill state in [0,1] for each tank in spec.ballast_tanks (future use)
     pub ballast_fill: Vec<f32>,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SubInputs {
-    pub thrust: f32, // -1..1 (forward/back)
-    /// Rudder input in [-1, 1].
-    /// Convention: +1 = right rudder (nose yaws right when moving forward),
-    /// -1 = left rudder. The physics maps this to yaw torque so that forward
-    /// motion with positive input decreases heading_yaw (right turn).
-    pub yaw: f32, // -1..1 (right rudder positive)
-    /// Forward ballast pump speed in [-1,1]. +1 pumps water in (fill), -1 pumps out.
-    pub pump_fwd: f32,
-    /// Aft ballast pump speed in [-1,1]. +1 pumps water in (fill), -1 pumps out.
-    pub pump_aft: f32,
 }

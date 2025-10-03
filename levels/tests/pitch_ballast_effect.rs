@@ -1,6 +1,6 @@
 use levels::{
-    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputs, SubState,
-    Vec3f,
+    builtins::greybox_level, step_submarine, FlowFieldSpec, LevelSpec, Quatf, SubInputState,
+    SubState, Vec3f,
 };
 
 fn level_with_uniform_flow(mut base: LevelSpec, flow: Vec3f) -> LevelSpec {
@@ -37,7 +37,7 @@ fn forward_heavy_ballast_pitches_nose_down() {
 
     let dt = 1.0 / 60.0;
     let mut t = 0.0f32;
-    let inputs = SubInputs {
+    let inputs = SubInputState {
         thrust: 0.0,
         yaw: 0.0,
         pump_fwd: 0.0,
@@ -73,7 +73,7 @@ fn aft_heavy_ballast_pitches_nose_up() {
 
     let dt = 1.0 / 60.0;
     let mut t = 0.0f32;
-    let inputs = SubInputs {
+    let inputs = SubInputState {
         thrust: 0.0,
         yaw: 0.0,
         pump_fwd: 0.0,
