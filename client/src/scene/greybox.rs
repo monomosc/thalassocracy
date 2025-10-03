@@ -1,5 +1,3 @@
-use bevy::animation::{AnimationTarget, AnimationTargetId};
-use bevy::asset::ron::de;
 use bevy::color::{LinearRgba, Srgba};
 use bevy::core_pipeline::bloom::BloomPrefilter;
 use bevy::image::{ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSamplerDescriptor};
@@ -21,7 +19,7 @@ use super::setup::spawn_box;
 use super::submarine::{
     make_rudder_prism_mesh, AngularVelocity, Rudder, SubPhysics, Submarine, Velocity,
 };
-use bevy::render::render_resource::{Face, FilterMode, TextureUsages};
+use bevy::render::render_resource::{Face, TextureUsages};
 
 #[derive(Component)]
 pub struct StationRoom;

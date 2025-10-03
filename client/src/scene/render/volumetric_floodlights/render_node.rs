@@ -1,5 +1,5 @@
 use bevy::ecs::query::QueryItem;
-use bevy::pbr::{FogMeta, ViewClusterBindings, ViewFogUniformOffset, ViewShadowBindings};
+use bevy::pbr::{ViewFogUniformOffset, ViewShadowBindings};
 use bevy::prelude::*;
 use bevy::render::{
     camera::ExtractedCamera,

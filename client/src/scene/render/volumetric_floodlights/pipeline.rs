@@ -1,11 +1,10 @@
 use bevy::asset::AssetServer;
 use bevy::pbr::{
-    DirectionalLightShadowMap, DistanceFog, FogFalloff, FogMeta, GpuFog, LightMeta,
+    FogMeta, GpuFog,
     ViewFogUniformOffset,
 };
 use bevy::prelude::*;
-use bevy::render::render_resource::{BindGroupLayoutDescriptor, ShaderType};
-use bevy::render::texture::TextureCache;
+use bevy::render::render_resource::ShaderType;
 use bevy::render::{
     mesh::{Mesh, MeshVertexBufferLayoutRef, RenderMesh},
     render_asset::RenderAssets,
