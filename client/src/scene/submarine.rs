@@ -6,6 +6,7 @@ use bevy::render::render_resource::PrimitiveTopology;
 use levels::{builtins::greybox_level, SubInputState, SubInputs, SubState, SubStepDebug};
 use levels::{step_submarine_dbg, SubPhysicsSpec};
 
+use crate::net::FilteredServerState;
 use crate::sim_pause::SimPause;
 
 #[derive(Component)]
@@ -65,6 +66,7 @@ impl Default for ClientPhysicsTiming {
 
 pub fn update_sub_input_state(
     controls: Option<Res<crate::ThrustInput>>,
+    filtered: Option<Res<FilteredServerState>>,
     mut q: Query<&mut SubInputStateComp, With<Submarine>>,
 ) {
     let inputs = controls
@@ -76,11 +78,22 @@ pub fn update_sub_input_state(
             pump_aft: c.pump_aft,
         })
         .unwrap_or_default();
+    let server_input = filtered
+        .as_ref()
+        .filter(|f| f.initialized)
+        .map(|f| f.input_state);
     for mut state in &mut q {
-        state.0.apply_inputs(inputs);
+        let mut desired = SubInputState::from_inputs(inputs);
+        if let Some(server) = server_input {
+            let alpha = 0.25_f32;
+            desired.thrust += alpha * (server.thrust - desired.thrust);
+            desired.yaw += alpha * (server.yaw - desired.yaw);
+            desired.pump_fwd += alpha * (server.pump_fwd - desired.pump_fwd);
+            desired.pump_aft += alpha * (server.pump_aft - desired.pump_aft);
+        }
+        state.0 = desired;
     }
 }
-
 // Quatf is the same type as Bevy's Quat (re-exported from bevy_math).
 
 #[allow(clippy::type_complexity)]
@@ -148,7 +161,7 @@ pub fn simulate_submarine(
         input_state,
     ) in &mut q_sub
     {
-        // Map visual mesh (+X forward) to physics body (+Z forward): yaw +90°
+        // Map visual mesh (+X forward) to physics body (+Z forward): yaw +90 deg
         let body_from_mesh = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
         let mesh_from_body = body_from_mesh.conjugate();
         // Initialize persistent SubState once if needed
@@ -222,23 +235,36 @@ pub fn simulate_submarine(
 pub fn apply_server_corrections(
     time: Res<Time>,
     mut commands: Commands,
-    mut q: Query<(Entity, &mut Transform, &mut Velocity, &mut ServerCorrection), With<Submarine>>,
+    mut q: Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Velocity,
+            &mut SubStateComp,
+            &mut ServerCorrection,
+        ),
+        With<Submarine>,
+    >,
     controls: Option<Res<crate::ThrustInput>>,
+    filtered: Option<Res<FilteredServerState>>,
 ) {
     let dt = time.delta_secs();
     if dt <= 0.0 {
         return;
     }
 
-    for (e, mut t, mut v, mut corr) in &mut q {
-        // Critically-damped like smoothing via exponential approach, with
-        // separate handling for rotation when player is actively steering.
+    let filtered_state = filtered
+        .as_ref()
+        .filter(|f| f.initialized)
+        .map(|f| (**f).clone());
+
+    for (e, mut t, mut v, mut state_comp, mut corr) in &mut q {
         let yaw_input_mag = controls.as_ref().map(|c| c.yaw.abs()).unwrap_or(0.0);
         let steering = yaw_input_mag > 0.05;
 
-        let stiff_pos = 10.0_f32; // position/velocity convergence
+        let stiff_pos = 10.0_f32;
         let stiff_vel = 10.0_f32;
-        let stiff_rot = if steering { 4.0 } else { 8.0 }; // reduce rotation stiffness while steering
+        let stiff_rot = if steering { 4.0 } else { 8.0 };
 
         let alpha_pos = 1.0 - (-stiff_pos * dt).exp();
         let alpha_vel = 1.0 - (-stiff_vel * dt).exp();
@@ -248,19 +274,34 @@ pub fn apply_server_corrections(
         t.rotation = t.rotation.slerp(corr.target_rot, alpha_rot);
         **v = (**v).lerp(corr.target_vel, alpha_vel);
 
+        if let Some(filtered) = filtered_state.as_ref() {
+            state_comp.0.position =
+                levels::Vec3f::new(filtered.pos.x, filtered.pos.y, filtered.pos.z);
+            state_comp.0.velocity =
+                levels::Vec3f::new(filtered.vel.x, filtered.vel.y, filtered.vel.z);
+            state_comp.0.orientation = filtered.body_rot;
+            state_comp.0.ang_mom =
+                levels::Vec3f::new(filtered.ang_mom.x, filtered.ang_mom.y, filtered.ang_mom.z);
+            state_comp.0.ballast_fill = filtered.ballast_fill.clone();
+        } else {
+            let current_pos = t.translation;
+            let current_vel = **v;
+            state_comp.0.position = levels::Vec3f::new(current_pos.x, current_pos.y, current_pos.z);
+            state_comp.0.velocity = levels::Vec3f::new(current_vel.x, current_vel.y, current_vel.z);
+            let body_from_mesh = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+            state_comp.0.orientation = t.rotation * body_from_mesh;
+        }
+
         corr.elapsed += dt;
         let pos_err = t.translation.distance(corr.target_pos);
         let ang_err = t.rotation.angle_between(corr.target_rot);
         let vel_err = (**v - corr.target_vel).length();
 
-        // Remove correction only when sufficiently close; avoid forced final snap.
         if pos_err < 0.01 && ang_err < 0.01 && vel_err < 0.02 {
-            // Close enough: stop correcting without forcing an exact snap.
             commands.entity(e).remove::<ServerCorrection>();
         }
     }
 }
-
 pub fn animate_rudder(
     _time: Res<Time>,
     q_sub: Query<(&Transform, &Velocity), With<Submarine>>,

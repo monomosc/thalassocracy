@@ -512,7 +512,7 @@ fn server_broadcast_state(
     tick: Res<Tick>,
     start: Res<ServerStart>,
     mut server: ResMut<RenetServer>,
-    q: Query<(&Player, &SubStateComp)>,
+    q: Query<(&Player, &SubStateComp, &SubInputStateComp)>,
 ) {
     timing.acc += time.delta_secs();
     if timing.acc < timing.dt {
@@ -521,7 +521,7 @@ fn server_broadcast_state(
     timing.acc -= timing.dt;
 
     let mut players = Vec::new();
-    for (player, state) in &q {
+    for (player, state, input_state) in &q {
         players.push(protocol::NetPlayer {
             id: player.id,
             position: [state.0.position.x, state.0.position.y, state.0.position.z],
@@ -532,6 +532,14 @@ fn server_broadcast_state(
                 state.0.orientation.z,
                 state.0.orientation.w,
             ],
+            ang_mom: [state.0.ang_mom.x, state.0.ang_mom.y, state.0.ang_mom.z],
+            ballast_fill: state.0.ballast_fill.clone(),
+            input_state: protocol::NetInputState {
+                thrust: input_state.0.thrust,
+                yaw: input_state.0.yaw,
+                pump_fwd: input_state.0.pump_fwd,
+                pump_aft: input_state.0.pump_aft,
+            },
         });
     }
     let server_ms = start.0.elapsed().as_millis() as u64;

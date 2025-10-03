@@ -8,6 +8,7 @@ use tracing::{info, warn};
 use crate::desync_metrics::NetClientStats;
 use crate::scene::submarine::ClientPhysicsTiming;
 use crate::scene::submarine::{NetControlled, ServerCorrection, Submarine, Velocity};
+use levels::SubInputState;
 
 use crate::Args;
 use protocol::{
@@ -38,12 +39,16 @@ pub struct TimeSync {
     pub last_server_ms: u64,
 }
 
-#[derive(Resource, Debug, Clone, Copy)]
+#[derive(Resource, Debug, Clone)]
 pub struct FilteredServerState {
     pub initialized: bool,
     pub pos: Vec3,
     pub rot: Quat,
+    pub body_rot: Quat,
     pub vel: Vec3,
+    pub ang_mom: Vec3,
+    pub ballast_fill: Vec<f32>,
+    pub input_state: SubInputState,
 }
 
 impl Default for FilteredServerState {
@@ -52,7 +57,11 @@ impl Default for FilteredServerState {
             initialized: false,
             pos: Vec3::ZERO,
             rot: Quat::IDENTITY,
+            body_rot: Quat::IDENTITY,
             vel: Vec3::ZERO,
+            ang_mom: Vec3::ZERO,
+            ballast_fill: Vec::new(),
+            input_state: SubInputState::default(),
         }
     }
 }
@@ -256,16 +265,28 @@ pub fn apply_state_to_sub(
             let o = me.orientation;
             Quat::from_xyzw(o[0], o[1], o[2], o[3])
         };
-        // Convert physics (body +Z forward) to mesh (visual +X forward): apply -90° yaw
+        // Convert physics (body +Z forward) to mesh (visual +X forward): apply -90 deg yaw
         let target_rot = target_rot_raw * Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2);
         let target_vel_raw = Vec3::new(me.velocity[0], me.velocity[1], me.velocity[2]);
+        let server_ang_mom = Vec3::new(me.ang_mom[0], me.ang_mom[1], me.ang_mom[2]);
+        let server_input = SubInputState {
+            thrust: me.input_state.thrust,
+            yaw: me.input_state.yaw,
+            pump_fwd: me.input_state.pump_fwd,
+            pump_aft: me.input_state.pump_aft,
+        };
+        let server_ballast = me.ballast_fill.clone();
 
         // Initialize or low-pass filter the authoritative target to remove HF jitter
         if !filtered.initialized {
             filtered.pos = target_pos_raw;
             // Initialize in the same frame (mesh space) used for comparisons/corrections
             filtered.rot = target_rot;
+            filtered.body_rot = target_rot_raw;
             filtered.vel = target_vel_raw;
+            filtered.ang_mom = server_ang_mom;
+            filtered.ballast_fill = server_ballast.clone();
+            filtered.input_state = server_input;
             filtered.initialized = true;
         } else {
             let dt = time.delta_secs().max(1e-3);
@@ -275,14 +296,29 @@ pub fn apply_state_to_sub(
             let alpha = 1.0 - (-dt / tau).exp();
             filtered.pos = filtered.pos.lerp(target_pos_raw, alpha);
             filtered.rot = filtered.rot.slerp(target_rot, alpha);
+            filtered.body_rot = filtered.body_rot.slerp(target_rot_raw, alpha);
             // Blend velocity toward server but also consider current sim velocity to avoid buzz
             filtered.vel = filtered.vel.lerp(target_vel_raw, alpha);
+            filtered.ang_mom = filtered.ang_mom.lerp(server_ang_mom, alpha);
+            if filtered.ballast_fill.len() != server_ballast.len() {
+                filtered.ballast_fill = server_ballast.clone();
+            } else {
+                for (f, target) in filtered.ballast_fill.iter_mut().zip(server_ballast.iter()) {
+                    *f += alpha * (target - *f);
+                }
+            }
+            filtered.input_state.thrust +=
+                alpha * (server_input.thrust - filtered.input_state.thrust);
+            filtered.input_state.yaw += alpha * (server_input.yaw - filtered.input_state.yaw);
+            filtered.input_state.pump_fwd +=
+                alpha * (server_input.pump_fwd - filtered.input_state.pump_fwd);
+            filtered.input_state.pump_aft +=
+                alpha * (server_input.pump_aft - filtered.input_state.pump_aft);
         }
 
         let target_pos = filtered.pos;
         let target_rot = filtered.rot;
         let target_vel = filtered.vel;
-
         // If the error is huge (teleport), snap immediately; otherwise smooth via ServerCorrection
         let raw_pos_err = t.translation.distance(target_pos_raw);
         let raw_ang_err = t.rotation.angle_between(target_rot);

@@ -66,7 +66,7 @@ pub fn update_game_camera(
             CamMode::FirstPerson => {
                 // Lock camera to the submarine with an orientation offset:
                 // Camera looks along its local -Z; sub "forward" is +X (mesh space).
-                // Apply a -90° yaw so camera -Z aligns with sub +X.
+                // Apply a -90 deg yaw so camera -Z aligns with sub +X.
                 let fp_offset = Vec3::new(1.0, 0.0, 0.0);
                 cam_t.translation = sub_pos + (sub_t.rotation * fp_offset);
                 let yaw_minus_90 = Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2);

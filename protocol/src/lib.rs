@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const PROTOCOL_VERSION: u16 = 3;
+pub const PROTOCOL_VERSION: u16 = 4;
 // Shared netcode protocol id used by client and server handshakes
 pub const NETCODE_PROTOCOL_ID: u64 = 7;
 
@@ -62,7 +62,7 @@ pub struct InputTick {
     // Minimal input set for Milestone 0; expand later.
     pub thrust: f32,
     /// Rudder input in [-1,1]. Convention: +1 = right rudder (nose yaws right
-    /// under forward motion), −1 = left rudder.
+    /// under forward motion), -1 = left rudder.
     pub yaw: f32,
     /// Forward ballast pump speed in [-1,1]. +1 pumps water in (fill), -1 pumps out.
     pub pump_fwd: f32,
@@ -85,12 +85,23 @@ pub struct StateDelta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetInputState {
+    pub thrust: f32,
+    pub yaw: f32,
+    pub pump_fwd: f32,
+    pub pump_aft: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetPlayer {
     pub id: Uuid,
     pub position: [f32; 3],
     pub velocity: [f32; 3],
-    /// Full body orientation as quaternion, `[x, y, z, w]` order.
+    /// Full body orientation as quaternion, [x, y, z, w] order.
     pub orientation: [f32; 4],
+    pub ang_mom: [f32; 3],
+    pub ballast_fill: Vec<f32>,
+    pub input_state: NetInputState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
