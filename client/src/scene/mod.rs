@@ -43,7 +43,7 @@ impl Plugin for ScenePlugin {
 
         // Lightweight underwater look and feel
         app.add_plugins(render::volumetric_floodlights::VolumetricFloodlightsPlugin);
-        //app.add_plugins(water::WaterFxPlugin);
+        app.add_plugins(water::WaterFxPlugin);
         app.add_plugins(postprocess::WaterPostProcessPlugin);
         app.add_plugins(ore::OrePlugin);
     }

@@ -16,6 +16,7 @@ mod render_node;
 mod ui;
 
 pub use cones::VolumetricCone;
+pub use render_node::FloodlightPassLabel;
 
 pub const CONE_VOLUME_SHADER_PATH: &str = "shaders/volumetric_floodlights/volumetric_cones.wgsl";
 
@@ -118,7 +119,7 @@ impl Plugin for VolumetricFloodlightsPlugin {
                         Node3d::MainTransparentPass,
                         render_node::FloodlightPassLabel,
                         Node3d::EndMainPass,
-                    ),
+                    )
                 );
         }
     }

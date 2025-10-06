@@ -17,7 +17,7 @@ use bevy::render::{
 use super::{pipeline::ViewConeRenderData, RenderVolumetricLightingMode, VolumetricLightingMode};
 
 #[derive(RenderLabel, Debug, Clone, Hash, PartialEq, Eq)]
-pub(super) struct FloodlightPassLabel;
+pub struct FloodlightPassLabel;
 
 #[derive(Default)]
 pub(super) struct FloodlightViewNode;

@@ -45,8 +45,8 @@ impl Plugin for RenderSettingsPlugin {
         app.init_resource::<RenderSettings>()
             .register_type::<RenderSettings>();
 
-        #[cfg(feature = "windowing")]
-        app.add_plugins(ResourceInspectorPlugin::<RenderSettings>::default());
+        //#[cfg(feature = "windowing")]
+        //app.add_plugins(ResourceInspectorPlugin::<RenderSettings>::default());
 
         app.init_resource::<VolumetricConeShaderDebugSettings>()
             .register_type::<VolumetricConeShaderDebugSettings>();
